@@ -1,7 +1,7 @@
 <!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yorknew • Creador Hunter</title><style>:root{font-family:system-ui;background:#0b1019;color:#eaf0f9}*{box-sizing:border-box}body{margin:0}header{background:#151e2e;padding:22px;border-bottom:2px solid #e3454a}h1{margin:0;font-size:25px}h2{font-size:19px;color:#f6d58a}.sub{color:#aab7cb}main{max-width:1180px;margin:auto;padding:18px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}.stat,.panel{background:#182335;border:1px solid #334157;border-radius:12px;padding:15px}.stat strong{font-size:25px;color:#f6d58a;display:block}.tabs{display:flex;gap:7px;overflow:auto;margin:12px 0 22px;position:sticky;top:0;background:#0b1019;padding:10px 0;z-index:4}.jump{white-space:nowrap;text-decoration:none;color:#eaf0f9;background:#283a54;border:1px solid #50617a;border-radius:8px;padding:9px 12px;font-size:13px}.sheet-section{scroll-margin-top:85px;margin:22px 0 32px}.section-title{font-weight:800;font-size:20px;color:#f6d58a;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #50617a}html{scroll-behavior:smooth} @media print {.tabs{display:none}.sheet-section{break-inside:avoid}button{display:none}}.tabs button{white-space:nowrap}button,input,select,textarea{font:inherit}button{background:#283a54;color:white;border:1px solid #50617a;border-radius:8px;padding:9px 12px;cursor:pointer}button:hover{background:#395271}button:disabled{opacity:.35;cursor:not-allowed}.active,.primary{background:#a93240}input,select,textarea{background:#0e1725;color:white;border:1px solid #50617a;border-radius:7px;padding:9px;width:100%}label{display:block;color:#b6c4d6;margin:8px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.trait{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #344359;padding:9px 0}.trait .controls{display:flex;align-items:center;gap:9px}.trait button{padding:4px 10px}.trait small{color:#9bacbf}.notice{background:#352c24;border-left:4px solid #e6b36d;padding:10px;margin:12px 0}.ok{color:#8fe1af}.bad{color:#ff8b90}.hide{display:none}textarea{min-height:90px}.portrait{width:100%;max-width:270px;aspect-ratio:3/4;object-fit:cover;border:2px solid #50617a;border-radius:12px;background:#0e1725}.identity-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:20px;align-items:start}.identity-photo{border:1px solid #50617a;border-radius:12px;padding:12px;background:#101c2b;text-align:center}.identity-photo .portrait{max-width:205px}.identity-photo input{font-size:12px}.identity-photo button{margin-top:8px}@media(max-width:650px){.identity-layout{grid-template-columns:minmax(0,1fr) 140px;gap:10px}.identity-photo{padding:7px}.identity-photo .portrait{max-width:130px}.identity-photo button{font-size:12px;padding:6px}.identity-layout .grid{grid-template-columns:1fr}}.photo-area{display:flex;flex-wrap:wrap;gap:18px;align-items:start}.photo-area>div{flex:1;min-width:210px}.notes-area textarea{min-height:150px;resize:vertical}footer{color:#93a3b7;text-align:center;padding:30px}#log{max-height:260px;overflow:auto;font-size:13px}.catalog-entry{border:1px solid #334157;border-radius:9px;margin:7px 0;background:#111b2b;padding:9px 12px}.catalog-entry summary{cursor:pointer;font-weight:600;line-height:1.5}.catalog-entry summary small{color:#aab7cb;font-weight:400}.catalog-entry[hidden],.trait-group[hidden]{display:none}.trait-group{border:1px solid #46556a;border-radius:10px;padding:9px;margin:12px 0}.trait-group>summary{cursor:pointer;font-weight:750;color:#f6d58a;padding:6px}.trait-description{color:#d5deeb;line-height:1.5}.catalog-label{display:block;margin:12px 0}.catalog-entry button{margin-bottom:4px} .top-switch{display:flex;gap:10px;max-width:1180px;margin:14px auto 0;padding:0 18px}.top-switch button{flex:1;font-weight:750;padding:13px}.top-switch button.selected{background:#a93240;border-color:#f5c66d}.market-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}.market-card{background:#182335;border:1px solid #334157;border-radius:12px;padding:15px}.market-card h2{margin-top:0}.money{font-size:28px;color:#f6d58a;font-weight:800}.muted{color:#aab7cb;font-size:13px}.market-row{border-bottom:1px solid #344359;padding:10px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}.market-row button{flex-shrink:0}.market-row small{display:block;color:#aab7cb}.dice-results{font-size:18px;line-height:1.8}.pill{display:inline-block;padding:4px 9px;margin:3px;background:#293c56;border-radius:7px}.wallet-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.market-note{border-left:3px solid #e6b36d;padding:10px;background:#352c24;margin:12px 0}@media(max-width:650px){.market-row{align-items:flex-start;flex-direction:column}.top-switch{gap:6px}} [hidden]{display:none!important}#playerSheetPreview{width:min(850px,calc(100vw - 2rem));max-height:85vh;overflow:auto;color:inherit}#playerSheetPreview::backdrop{background:#000a}</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · cambios y costos en tiempo real</div></header>
 <section class="panel" id="campaignSignIn">
-  <h2>Acceso por invitación</h2>
-  <form id="campaignLogin"><label>Correo invitado<input type="email" name="email" required autocomplete="email"></label><button class="primary">Enviar enlace de acceso</button></form>
+  <h2>Entrar a la campaña</h2><p>Si ya aceptaste tu invitación, tu cuenta está habilitada. Si cerraste sesión o cambiaste de navegador, pide un enlace para volver a entrar.</p>
+  <form id="campaignLogin"><label>Correo invitado<input type="email" name="email" required autocomplete="email"></label><button class="primary">Enviar enlace para iniciar sesión</button></form>
   <p id="campaignLoginStatus" role="status"></p>
 </section>
 <div id="campaignApp" hidden>
@@ -404,7 +404,8 @@ const loginMessage = message => {appElement('campaignLoginStatus').textContent =
 const campaignUrl = 'https://envecc.github.io/hunter-x-hunter-yorknew/';
 const campaignClient = window.supabase?.createClient(
   'https://opgeoypphvoyeuppkafm.supabase.co',
-  'sb_publishable_IoVXDZOjL9YTp1C-WBCCWQ_0Ge1ifUX'
+  'sb_publishable_IoVXDZOjL9YTp1C-WBCCWQ_0Ge1ifUX',
+  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}
 );
 
 function cloudResult(result) {
@@ -640,12 +641,24 @@ appElement('campaignLogin').addEventListener('submit',async event => {
   button.disabled = true;
   try {
     cloudResult(await campaignClient.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:campaignUrl}}));
-    loginMessage('Revisa el correo para abrir el enlace de acceso.');
+    loginMessage('Revisa tu correo y abre el enlace en el navegador donde quieres usar la campaña.');
   } catch {loginMessage('No se pudo enviar el enlace. Confirma que el correo fue invitado o contacta al narrador.')}
   finally {button.disabled = false}
 });
 
 if (campaignClient) {
+  campaignClient.auth.onAuthStateChange(event => {
+    if (event === 'SIGNED_OUT' && campaignUser) {
+      appElement('campaignApp').hidden = true;
+      appElement('campaignSignIn').hidden = false;
+      campaignUser = null;
+      campaignRole = '';
+      campaignCanNarrate = false;
+      campaignSheet = null;
+      campaignDraftKey = '';
+      loginMessage('Tu sesión terminó. Puedes entrar nuevamente con tu correo invitado.');
+    }
+  });
   campaignClient.auth.getSession().then(result=>openCampaign(cloudResult(result).session))
     .catch(()=>loginMessage('No se pudo conectar con la campaña. Intenta recargar la página.'));
 } else {
