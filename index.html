@@ -1,8 +1,28 @@
-<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yorknew • Creador Hunter</title><style>:root{font-family:system-ui;background:#0b1019;color:#eaf0f9}*{box-sizing:border-box}body{margin:0}header{background:#151e2e;padding:22px;border-bottom:2px solid #e3454a}h1{margin:0;font-size:25px}h2{font-size:19px;color:#f6d58a}.sub{color:#aab7cb}main{max-width:1180px;margin:auto;padding:18px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}.stat,.panel{background:#182335;border:1px solid #334157;border-radius:12px;padding:15px}.stat strong{font-size:25px;color:#f6d58a;display:block}.tabs{display:flex;gap:7px;overflow:auto;margin:12px 0 22px;position:sticky;top:0;background:#0b1019;padding:10px 0;z-index:4}.jump{white-space:nowrap;text-decoration:none;color:#eaf0f9;background:#283a54;border:1px solid #50617a;border-radius:8px;padding:9px 12px;font-size:13px}.sheet-section{scroll-margin-top:85px;margin:22px 0 32px}.section-title{font-weight:800;font-size:20px;color:#f6d58a;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #50617a}html{scroll-behavior:smooth} @media print {.tabs{display:none}.sheet-section{break-inside:avoid}button{display:none}}.tabs button{white-space:nowrap}button,input,select,textarea{font:inherit}button{background:#283a54;color:white;border:1px solid #50617a;border-radius:8px;padding:9px 12px;cursor:pointer}button:hover{background:#395271}button:disabled{opacity:.35;cursor:not-allowed}.active,.primary{background:#a93240}input,select,textarea{background:#0e1725;color:white;border:1px solid #50617a;border-radius:7px;padding:9px;width:100%}label{display:block;color:#b6c4d6;margin:8px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.trait{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #344359;padding:9px 0}.trait .controls{display:flex;align-items:center;gap:9px}.trait button{padding:4px 10px}.trait small{color:#9bacbf}.notice{background:#352c24;border-left:4px solid #e6b36d;padding:10px;margin:12px 0}.ok{color:#8fe1af}.bad{color:#ff8b90}.hide{display:none}textarea{min-height:90px}.portrait{width:100%;max-width:270px;aspect-ratio:3/4;object-fit:cover;border:2px solid #50617a;border-radius:12px;background:#0e1725}.identity-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:20px;align-items:start}.identity-photo{border:1px solid #50617a;border-radius:12px;padding:12px;background:#101c2b;text-align:center}.identity-photo .portrait{max-width:205px}.identity-photo input{font-size:12px}.identity-photo button{margin-top:8px}@media(max-width:650px){.identity-layout{grid-template-columns:minmax(0,1fr) 140px;gap:10px}.identity-photo{padding:7px}.identity-photo .portrait{max-width:130px}.identity-photo button{font-size:12px;padding:6px}.identity-layout .grid{grid-template-columns:1fr}}.photo-area{display:flex;flex-wrap:wrap;gap:18px;align-items:start}.photo-area>div{flex:1;min-width:210px}.notes-area textarea{min-height:150px;resize:vertical}footer{color:#93a3b7;text-align:center;padding:30px}#log{max-height:260px;overflow:auto;font-size:13px}.catalog-entry{border:1px solid #334157;border-radius:9px;margin:7px 0;background:#111b2b;padding:9px 12px}.catalog-entry summary{cursor:pointer;font-weight:600;line-height:1.5}.catalog-entry summary small{color:#aab7cb;font-weight:400}.catalog-entry[hidden],.trait-group[hidden]{display:none}.trait-group{border:1px solid #46556a;border-radius:10px;padding:9px;margin:12px 0}.trait-group>summary{cursor:pointer;font-weight:750;color:#f6d58a;padding:6px}.trait-description{color:#d5deeb;line-height:1.5}.catalog-label{display:block;margin:12px 0}.catalog-entry button{margin-bottom:4px} .top-switch{display:flex;gap:10px;max-width:1180px;margin:14px auto 0;padding:0 18px}.top-switch button{flex:1;font-weight:750;padding:13px}.top-switch button.selected{background:#a93240;border-color:#f5c66d}.market-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}.market-card{background:#182335;border:1px solid #334157;border-radius:12px;padding:15px}.market-card h2{margin-top:0}.money{font-size:28px;color:#f6d58a;font-weight:800}.muted{color:#aab7cb;font-size:13px}.market-row{border-bottom:1px solid #344359;padding:10px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}.market-row button{flex-shrink:0}.market-row small{display:block;color:#aab7cb}.dice-results{font-size:18px;line-height:1.8}.pill{display:inline-block;padding:4px 9px;margin:3px;background:#293c56;border-radius:7px}.wallet-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.market-note{border-left:3px solid #e6b36d;padding:10px;background:#352c24;margin:12px 0}@media(max-width:650px){.market-row{align-items:flex-start;flex-direction:column}.top-switch{gap:6px}} </style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · cambios y costos en tiempo real</div></header><div class="top-switch"><button id="switch-character" class="selected" onclick="switchPage('character')">01 · Creación de personaje</button><button id="switch-market" onclick="switchPage('market')">02 · Juego, dados y mercado</button><button id="switch-narrator" onclick="switchPage('narrator')">Narrador</button></div><main id="characterPage"><div class="stats" id="stats"></div><div class="tabs" id="tabs"></div><div id="content"></div></main><main id="marketPage" style="display:none"></main><main id="narratorPage" hidden>
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yorknew • Creador Hunter</title><style>:root{font-family:system-ui;background:#0b1019;color:#eaf0f9}*{box-sizing:border-box}body{margin:0}header{background:#151e2e;padding:22px;border-bottom:2px solid #e3454a}h1{margin:0;font-size:25px}h2{font-size:19px;color:#f6d58a}.sub{color:#aab7cb}main{max-width:1180px;margin:auto;padding:18px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}.stat,.panel{background:#182335;border:1px solid #334157;border-radius:12px;padding:15px}.stat strong{font-size:25px;color:#f6d58a;display:block}.tabs{display:flex;gap:7px;overflow:auto;margin:12px 0 22px;position:sticky;top:0;background:#0b1019;padding:10px 0;z-index:4}.jump{white-space:nowrap;text-decoration:none;color:#eaf0f9;background:#283a54;border:1px solid #50617a;border-radius:8px;padding:9px 12px;font-size:13px}.sheet-section{scroll-margin-top:85px;margin:22px 0 32px}.section-title{font-weight:800;font-size:20px;color:#f6d58a;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #50617a}html{scroll-behavior:smooth} @media print {.tabs{display:none}.sheet-section{break-inside:avoid}button{display:none}}.tabs button{white-space:nowrap}button,input,select,textarea{font:inherit}button{background:#283a54;color:white;border:1px solid #50617a;border-radius:8px;padding:9px 12px;cursor:pointer}button:hover{background:#395271}button:disabled{opacity:.35;cursor:not-allowed}.active,.primary{background:#a93240}input,select,textarea{background:#0e1725;color:white;border:1px solid #50617a;border-radius:7px;padding:9px;width:100%}label{display:block;color:#b6c4d6;margin:8px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.trait{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #344359;padding:9px 0}.trait .controls{display:flex;align-items:center;gap:9px}.trait button{padding:4px 10px}.trait small{color:#9bacbf}.notice{background:#352c24;border-left:4px solid #e6b36d;padding:10px;margin:12px 0}.ok{color:#8fe1af}.bad{color:#ff8b90}.hide{display:none}textarea{min-height:90px}.portrait{width:100%;max-width:270px;aspect-ratio:3/4;object-fit:cover;border:2px solid #50617a;border-radius:12px;background:#0e1725}.identity-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:20px;align-items:start}.identity-photo{border:1px solid #50617a;border-radius:12px;padding:12px;background:#101c2b;text-align:center}.identity-photo .portrait{max-width:205px}.identity-photo input{font-size:12px}.identity-photo button{margin-top:8px}@media(max-width:650px){.identity-layout{grid-template-columns:minmax(0,1fr) 140px;gap:10px}.identity-photo{padding:7px}.identity-photo .portrait{max-width:130px}.identity-photo button{font-size:12px;padding:6px}.identity-layout .grid{grid-template-columns:1fr}}.photo-area{display:flex;flex-wrap:wrap;gap:18px;align-items:start}.photo-area>div{flex:1;min-width:210px}.notes-area textarea{min-height:150px;resize:vertical}footer{color:#93a3b7;text-align:center;padding:30px}#log{max-height:260px;overflow:auto;font-size:13px}.catalog-entry{border:1px solid #334157;border-radius:9px;margin:7px 0;background:#111b2b;padding:9px 12px}.catalog-entry summary{cursor:pointer;font-weight:600;line-height:1.5}.catalog-entry summary small{color:#aab7cb;font-weight:400}.catalog-entry[hidden],.trait-group[hidden]{display:none}.trait-group{border:1px solid #46556a;border-radius:10px;padding:9px;margin:12px 0}.trait-group>summary{cursor:pointer;font-weight:750;color:#f6d58a;padding:6px}.trait-description{color:#d5deeb;line-height:1.5}.catalog-label{display:block;margin:12px 0}.catalog-entry button{margin-bottom:4px} .top-switch{display:flex;gap:10px;max-width:1180px;margin:14px auto 0;padding:0 18px}.top-switch button{flex:1;font-weight:750;padding:13px}.top-switch button.selected{background:#a93240;border-color:#f5c66d}.market-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}.market-card{background:#182335;border:1px solid #334157;border-radius:12px;padding:15px}.market-card h2{margin-top:0}.money{font-size:28px;color:#f6d58a;font-weight:800}.muted{color:#aab7cb;font-size:13px}.market-row{border-bottom:1px solid #344359;padding:10px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}.market-row button{flex-shrink:0}.market-row small{display:block;color:#aab7cb}.dice-results{font-size:18px;line-height:1.8}.pill{display:inline-block;padding:4px 9px;margin:3px;background:#293c56;border-radius:7px}.wallet-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.market-note{border-left:3px solid #e6b36d;padding:10px;background:#352c24;margin:12px 0}@media(max-width:650px){.market-row{align-items:flex-start;flex-direction:column}.top-switch{gap:6px}} [hidden]{display:none!important}</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · cambios y costos en tiempo real</div></header>
+<section class="panel" id="campaignSignIn">
+  <h2>Acceso por invitación</h2>
+  <form id="campaignLogin"><label>Correo invitado<input type="email" name="email" required autocomplete="email"></label><button class="primary">Enviar enlace de acceso</button></form>
+  <p id="campaignLoginStatus" role="status"></p>
+</section>
+<div id="campaignApp" hidden>
+<section class="panel" id="campaignAccount">
+  <button id="campaignLogout" type="button">Cerrar sesión</button>
+  <span id="campaignRole"></span>
+  <div id="campaignPlayer" hidden>
+    <label>Fichas guardadas<select id="campaignSheets"></select></label>
+    <button id="campaignOpen" type="button">Abrir ficha</button>
+    <button id="campaignStore" type="button">Guardar ficha en la campaña</button>
+    <button id="campaignLegacy" type="button" hidden>Recuperar ficha de este navegador</button><button id="campaignVersions" type="button">Ver historial de la ficha</button>
+    <div id="campaignHistory"></div>
+    <div id="campaignAwards"></div>
+  </div>
+  <p id="campaignStatus" role="status"></p>
+</section>
+<div class="top-switch"><button id="switch-character" class="selected" onclick="switchPage('character')">01 · Creación de personaje</button><button id="switch-market" onclick="switchPage('market')">02 · Juego, dados y mercado</button><button id="switch-narrator" onclick="switchPage('narrator')">Narrador</button></div><main id="characterPage"><div class="stats" id="stats"></div><div class="tabs" id="tabs"></div><div id="content"></div></main><main id="marketPage" style="display:none"></main><main id="narratorPage" hidden>
   <section class="panel">
     <h2>Mesa del narrador</h2>
     <p>Importa los archivos JSON de tus jugadores. Las fichas y revisiones se guardan en este navegador.</p>
-    <label>Importar fichas<input id="reviewFiles" type="file" accept=".json" multiple></label>
+    <button id="campaignRefresh" type="button">Actualizar fichas de la campaña</button><label>Importar fichas<input id="reviewFiles" type="file" accept=".json" multiple></label>
     <label>Personaje<select id="reviewSelect"></select></label>
     <p id="reviewStatus" role="status"></p>
   </section>
@@ -20,7 +40,7 @@
       <div id="reviewHistory"></div>
     </form>
   </div>
-</main><footer><p>Para compartir con terceros: publica este archivo HTML en un alojamiento estático (por ejemplo GitHub Pages o Netlify Drop). Los datos guardados en este navegador no se transmiten automáticamente. Para compartir una ficha completa, exporta su JSON y envíalo junto al enlace.</p>Calidades de equipo: regla casera, no oficial · Herramienta de mesa no oficial · Datos locales en este navegador · Reglas basadas en el manual proporcionado</footer><script>
+</main><footer><p>Para compartir con terceros: publica este archivo HTML en un alojamiento estático (por ejemplo GitHub Pages o Netlify Drop). Los datos guardados en este navegador no se transmiten automáticamente. Para compartir una ficha completa, exporta su JSON y envíalo junto al enlace.</p>Calidades de equipo: regla casera, no oficial · Herramienta de mesa no oficial · Datos locales en este navegador · Reglas basadas en el manual proporcionado</footer></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.95.3"></script><script>
 const attributes=['Fuerza','Destreza','Resistencia','Carisma','Manipulación','Compostura','Inteligencia','Astucia','Aplomo'];
 const skills={Físicas:['Armas de fuego','Atletismo','Combate C.C.','Combate a distancia','Conducir','Esquivar','Fabricación','Sigilo','Seguridad'],Sociales:['Callejeo','Disfrazarse','Empatía','Expresión artística','Intimidación','Negocios','Persuasión','Trato con animales'],Mentales:['Alerta','Ciencias','Conciencia','Conocimiento','Informática','Investigación','Medicina','Ocultismo','Rastrear','Supervivencia']};
 const nen=['Ten','Ren','Zetsu','In','Gyo','En','Shu','Kou','Ken','Ryu'];
@@ -51,7 +71,7 @@ function categoryCost(kind,cat){let names=kind==='attrs'?attributes.filter(x=>ca
 function categoryLimit(kind,cat){return PRIORITY_LIMITS[kind][priorityOrder(kind).indexOf(cat)]}
 function changePriority(kind,cat,rank){const k=kind==='attrs'?'attrPriority':'skillPriority';let old=priorityOrder(kind),idx=old.indexOf(cat),next=old.slice();[next[idx],next[rank]]=[next[rank],next[idx]];if(CATEGORY_NAMES.some(c=>categoryCost(kind,c)>PRIORITY_LIMITS[kind][next.indexOf(c)])){alert('La nueva prioridad no admite la distribución actual. Reduce primero los puntos de las categorías afectadas.');render();return}d[k]=next;save();render()}
 function priorityPanel(kind){let order=priorityOrder(kind),labels=['Primaria','Secundaria','Terciaria'];return `<div class="panel"><h2>Prioridades de ${kind==='attrs'?'atributos':'habilidades'}</h2><p class="muted">Regla opcional de mesa: selecciona qué categoría recibe cada presupuesto. El manual indica ${kind==='attrs'?'12':'25'} puntos totales, sin fijar aquí una distribución por categorías.</p><div class="grid">${CATEGORY_NAMES.map(cat=>`<label>${cat}<select onchange="changePriority('${kind}','${cat}',Number(this.value))">${labels.map((l,i)=>`<option value="${i}" ${order.indexOf(cat)===i?'selected':''}>${l} · ${PRIORITY_LIMITS[kind][i]} puntos</option>`).join('')}</select><small>${categoryCost(kind,cat)} / ${categoryLimit(kind,cat)} puntos usados</small></label>`).join('')}</div><p class="muted">Para cambiar dos prioridades se intercambian automáticamente. El quinto círculo cuesta 2 puntos. Los incrementos posteriores por experiencia se gestionan por separado.</p></div>`}
-function save(){localStorage.setItem('yorknew_char',JSON.stringify(d))}function set(k,v){d[k]=v;save();render()}function adjust(kind,key,delta){let obj=d[kind],old=obj[key]||0,nu=old+delta;if(nu<0||nu>5||(kind==='attrs'&&nu<1))return;if(kind==='nen'&&nu>0&&!allowed(key))return;if(kind==='paths'&&nu>(caps[d.affinity]||caps.Intensificación)[paths.indexOf(key)])return;if((kind==='attrs'||kind==='skills')&&delta>0){let cat=categoryOf(kind,key),before=categoryCost(kind,cat),increment=1+(nu===5?1:0);if(before+increment>categoryLimit(kind,cat)){alert('Límite de '+cat+' alcanzado ('+categoryLimit(kind,cat)+' puntos). Cambia prioridades o distribuye en otra categoría.');return}}obj[key]=nu;save();render()}
+function save(){localStorage.setItem(campaignDraftKey || 'yorknew_char',JSON.stringify(d))}function set(k,v){d[k]=v;save();render()}function adjust(kind,key,delta){let obj=d[kind],old=obj[key]||0,nu=old+delta;if(nu<0||nu>5||(kind==='attrs'&&nu<1))return;if(kind==='nen'&&nu>0&&!allowed(key))return;if(kind==='paths'&&nu>(caps[d.affinity]||caps.Intensificación)[paths.indexOf(key)])return;if((kind==='attrs'||kind==='skills')&&delta>0){let cat=categoryOf(kind,key),before=categoryCost(kind,cat),increment=1+(nu===5?1:0);if(before+increment>categoryLimit(kind,cat)){alert('Límite de '+cat+' alcanzado ('+categoryLimit(kind,cat)+' puntos). Cambia prioridades o distribuye en otra categoría.');return}}obj[key]=nu;save();render()}
 function allowed(k){return ({En:d.nen.Ten>=2&&d.nen.Ren>=2,Gyo:d.nen.Ren>=2,In:d.nen.Zetsu>=3,Shu:d.nen.Ten>=3,Kou:d.nen.Ten>=3&&d.nen.Ren>=3&&d.nen.Zetsu>=3&&d.nen.Gyo>=3&&d.hatsu>=2,Ken:d.nen.Kou>=1,Ryu:d.nen.Ten>=5&&d.nen.Ren>=5})[k]??true}
 function field(k,label,type='text'){return `<label>${label}<input type="${type}" value="${esc(d[k])}" onchange="set('${k}',this.value)"></label>`}function esc(x){return String(x??'').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;')}
 function rows(names,kind){return names.map(k=>{let n=d[kind][k]||0;return `<div class="trait"><span>${esc(k)} <small>${kind==='paths'?((caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20)+'% máx.':''}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)">−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)">+</button></span></div>`}).join('')}
@@ -69,12 +89,12 @@ c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Ne
 c+=`<section id="sec4" class="sheet-section"><div class="section-title">05 · Méritos y defectos</div>`+`<div class="grid"><div class="panel"><h2>Méritos</h2><p class="sub">Pulsa un nombre para conocer su historia y efecto antes de elegirlo.</p>${catalog('merits',merits)}</div><div class="panel"><h2>Defectos</h2><p class="sub">Despliega cada defecto para leer sus consecuencias.</p>${catalog('defects',defects)}</div></div><div class="notice">Los defectos otorgan PG y los méritos consumen PG. El narrador debe validar coherencia y restricciones. Los méritos Hatsu requieren Nen, afinidad correspondiente y tienen límite de dos. Los rasgos con coste variable necesitan acuerdo con el narrador.</div>`;
 c+=`<section id="sec5" class="sheet-section"><div class="section-title">06 · Técnicas</div>`+`<div class="panel"><h2>Diseñador de técnicas especiales Nen</h2><div class="grid"><label>Nombre<input id="tn" placeholder="Nombre de técnica"></label><label>Requisitos / caminos<input id="tr" placeholder="Ej. Emisión 3 + Control 3"></label><label>Costo aura acordado<input id="tc" type="number" min="0"></label><label>Condiciones y compromisos<textarea id="td"></textarea></label></div><button class="primary" onclick="addTech()">Añadir técnica</button><div class="notice">El manual deja el costo de aura y la complejidad de cada técnica a criterio del narrador; aquí se registran, no se inventan.</div>${d.techniques.map((x,i)=>`<div class="trait"><span><b>${esc(x.name)}</b><br><small>${esc(x.requirements)} · ${esc(x.cost)} aura · ${esc(x.conditions)}</small></span><button onclick="d.techniques.splice(${i},1);save();render()">Eliminar</button></div>`).join('')}</div>`;
 c+=`<section id="sec6" class="sheet-section"><div class="section-title">07 · Experiencia</div>`+`<div class="grid"><div class="panel"><h2>Revisiones del narrador</h2><label>Aplicar revisión JSON<input type="file" accept=".json" onchange="applyReview(this)"></label>${reviewHistory(d.narratorReviews || [])}<h2>Asignar experiencia</h2><label>PX general<input type="number" min="0" value="${d.xp}" onchange="set('xp',Math.max(0,+this.value||0))"></label><label>PX Nen<input type="number" min="0" value="${d.xpNen}" onchange="set('xpNen',Math.max(0,+this.value||0))"></label><h2>Atributos</h2>${progression(attributes,'attrs')}<h2>Habilidades</h2>${progression(allSkills,'skills')}</div><div class="panel"><h2>Hatsu y caminos</h2>${progression(['Hatsu'],'hatsu')}${progression(paths,'paths')}<h2>Técnicas Nen</h2>${progression(nen,'nen')}<h2>Historial</h2><div id="log">${d.history.slice().reverse().map(x=>`<p>${esc(x)}</p>`).join('')}</div></div></div><div class="notice">PX general: atributo nuevo nivel ×5; habilidad ×2; Hatsu ×4; camino ×3. PX Nen: coste según valor actual y multiplicador del manual. Un nivel 0 de Nen requiere decisión del narrador.</div>`;
-c+=`<section id="sec7" class="sheet-section"><div class="section-title">08 · Ficha</div>`+`<div class="panel"><h2>${esc(d.name||'Personaje sin nombre')}</h2><p>${esc(d.type)} · ${esc(d.personality)} · ${esc(d.age)} años</p><p><b>Salud:</b> ${(d.attrs.Resistencia||1)+(+d.height||5)} · <b>Voluntad:</b> ${(d.attrs.Resistencia||1)+(d.attrs.Astucia||1)+d.willBonus} · <b>Velocidad:</b> ${speed} · <b>Reserva Nen:</b> ${d.hatsu*10+d.reserveBonus}</p><p><b>Afinidad:</b> ${d.affinity} · <b>Hatsu:</b> ${d.hatsu}</p><p><b>PG disponibles:</b> <span class="${b.free<0?'bad':'ok'}">${b.free}</span></p><div class="grid"><div><h2>Atributos</h2>${attributes.map(x=>`<p>${x}: ${d.attrs[x]}</p>`).join('')}</div><div><h2>Habilidades</h2>${allSkills.filter(x=>d.skills[x]).map(x=>`<p>${x}: ${d.skills[x]}</p>`).join('')}</div><div><h2>Nen</h2>${nen.filter(x=>d.nen[x]).map(x=>`<p>${x}: ${d.nen[x]}</p>`).join('')}<h2>Méritos y defectos</h2>${[...d.merits,...d.defects].map(x=>`<p>${esc(x.name)} (${x.cost})</p>`).join('')}</div></div><button class="primary" onclick="exportJSON()">Exportar ficha JSON</button> <button onclick="window.print()">Imprimir / guardar PDF</button> <button onclick="document.getElementById('importer').click()">Importar ficha</button><input type="file" id="importer" accept=".json" style="display:none" onchange="importJSON(this)"><button onclick="if(confirm('¿Reiniciar personaje?')){d=fresh();save();render()}">Nueva ficha</button></div></section><section id="sec8" class="sheet-section"><div class="section-title">09 · Diario de campaña</div><div class="grid"><div class="panel notes-area"><h2>Historia y opiniones de la mesa</h2><label>Historia y evolución del personaje<textarea oninput="updateNote('storyNotes',this.value)">${esc(d.storyNotes||'')}</textarea></label><label>Diario de sesiones, acontecimientos y relaciones<textarea oninput="updateNote('sessionNotes',this.value)">${esc(d.sessionNotes||'')}</textarea></label><label>Opiniones del jugador, impresiones y teorías<textarea oninput="updateNote('tableOpinions',this.value)">${esc(d.tableOpinions||'')}</textarea></label><p class="sub">Las notas se guardan automáticamente mientras escribes. Exporta el JSON para conservar una copia y compartirla.</p></div></div></section></section></section></section></section></section></section></section>`;
+c+=`<section id="sec7" class="sheet-section"><div class="section-title">08 · Ficha</div>`+`<div class="panel"><h2>${esc(d.name||'Personaje sin nombre')}</h2><p>${esc(d.type)} · ${esc(d.personality)} · ${esc(d.age)} años</p><p><b>Salud:</b> ${(d.attrs.Resistencia||1)+(+d.height||5)} · <b>Voluntad:</b> ${(d.attrs.Resistencia||1)+(d.attrs.Astucia||1)+d.willBonus} · <b>Velocidad:</b> ${speed} · <b>Reserva Nen:</b> ${d.hatsu*10+d.reserveBonus}</p><p><b>Afinidad:</b> ${d.affinity} · <b>Hatsu:</b> ${d.hatsu}</p><p><b>PG disponibles:</b> <span class="${b.free<0?'bad':'ok'}">${b.free}</span></p><div class="grid"><div><h2>Atributos</h2>${attributes.map(x=>`<p>${x}: ${d.attrs[x]}</p>`).join('')}</div><div><h2>Habilidades</h2>${allSkills.filter(x=>d.skills[x]).map(x=>`<p>${x}: ${d.skills[x]}</p>`).join('')}</div><div><h2>Nen</h2>${nen.filter(x=>d.nen[x]).map(x=>`<p>${x}: ${d.nen[x]}</p>`).join('')}<h2>Méritos y defectos</h2>${[...d.merits,...d.defects].map(x=>`<p>${esc(x.name)} (${x.cost})</p>`).join('')}</div></div><button class="primary" onclick="exportJSON()">Exportar ficha JSON</button> <button onclick="window.print()">Imprimir / guardar PDF</button> <button onclick="document.getElementById('importer').click()">Importar ficha</button><input type="file" id="importer" accept=".json" style="display:none" onchange="importJSON(this)"><button onclick="if(confirm('¿Reiniciar personaje?')){d=fresh();resetCampaignSheet();save();render()}">Nueva ficha</button></div></section><section id="sec8" class="sheet-section"><div class="section-title">09 · Diario de campaña</div><div class="grid"><div class="panel notes-area"><h2>Historia y opiniones de la mesa</h2><label>Historia y evolución del personaje<textarea oninput="updateNote('storyNotes',this.value)">${esc(d.storyNotes||'')}</textarea></label><label>Diario de sesiones, acontecimientos y relaciones<textarea oninput="updateNote('sessionNotes',this.value)">${esc(d.sessionNotes||'')}</textarea></label><label>Opiniones del jugador, impresiones y teorías<textarea oninput="updateNote('tableOpinions',this.value)">${esc(d.tableOpinions||'')}</textarea></label><p class="sub">Las notas se guardan automáticamente mientras escribes. Exporta el JSON para conservar una copia y compartirla.</p></div></div></section></section></section></section></section></section></section></section>`;
 if(b.free<0)c=`<div class="notice bad">Presupuesto excedido: ${-b.free} puntos gratuitos. Ajusta tus elecciones.</div>`+c;document.getElementById('content').innerHTML=c}
 const placeholderPortrait='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="300" height="400" fill="#101c2d"/><circle cx="150" cy="145" r="56" fill="#40536c"/><path d="M48 330 Q60 220 150 220 Q240 220 252 330" fill="#40536c"/><text x="150" y="375" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#aab7cb">Sin retrato</text></svg>');
 function updateNote(k,v){d[k]=v;save()}
 function uploadPortrait(input){const f=input.files?.[0];if(!f)return;if(!f.type.startsWith('image/')){alert('Selecciona una imagen');return}const reader=new FileReader();reader.onload=()=>{const im=new Image();im.onload=()=>{const max=850,ratio=Math.min(1,max/Math.max(im.width,im.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(im.width*ratio));canvas.height=Math.max(1,Math.round(im.height*ratio));canvas.getContext('2d').drawImage(im,0,0,canvas.width,canvas.height);d.portrait=canvas.toDataURL('image/jpeg',0.75);try{save()}catch(e){alert('La imagen es demasiado grande para el almacenamiento local; exporta tu ficha JSON.')}render()};im.onerror=()=>alert('No se pudo leer la imagen');im.src=reader.result};reader.readAsDataURL(f)}
-function exportJSON(){if(!d.sheetId && globalThis.crypto?.randomUUID){d.sheetId=crypto.randomUUID();save()}let blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(d.name||'personaje').replace(/[^a-z0-9áéíóúñ_-]/gi,'_')+'.json';a.click();URL.revokeObjectURL(url)}function importJSON(input){let f=input.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let v=JSON.parse(r.result);if(!v.attrs||!v.skills||!v.nen)throw Error('Formato inválido');d={...fresh(),...v};save();render()}catch(e){alert(e.message)}};r.readAsText(f)}
+function exportJSON(){if(!d.sheetId && globalThis.crypto?.randomUUID){d.sheetId=crypto.randomUUID();save()}let blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(d.name||'personaje').replace(/[^a-z0-9áéíóúñ_-]/gi,'_')+'.json';a.click();URL.revokeObjectURL(url)}function importJSON(input){let f=input.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let v=JSON.parse(r.result);if(!v.attrs||!v.skills||!v.nen)throw Error('Formato inválido');d={...fresh(),...v};resetCampaignSheet();save();render()}catch(e){alert(e.message)}};r.readAsText(f)}
 const weaponCatalog=[
 ['Pistola','7','9 mm','25','5','11','Chica'],['Revólver','5','.357','30','5','6','Chica'],['Ametralladora ligera','6','9 mm','50','4','32','Chica'],['Rifle','8','.30','300','8','5','Ninguna'],['Rifle de asalto','7','5.56','220','7','60','Grande'],['Escopeta','7','12ga','20','8','5','Grande'],['Ametralladora pesada','6','7.62','325','8','325','Ninguna'],['Arco','8','—','40','4 + éxitos','—','Ninguna'],['Cimitarra','7','—','CC','Fuerza + 5','—','Grande'],['Daga','4','—','CC','Fuerza + 2','—','Buena'],['Espada corta','5','—','CC','Fuerza + 3','—','Chica'],['Espada larga','5','—','CC','Fuerza + 4','—','Grande'],['Florete','5','—','CC','Fuerza + 3','—','Chica'],['Hacha','7','—','CC','Fuerza + 5','—','Grande'],['Lanzallamas','7','—','3','8','20','Ninguna'],['Lanza','7','—','CC','Fuerza + 3','—','Ninguna'],['Machete','5','—','CC','Fuerza + 3','—','Grande'],['Nunchaku','8','—','CC','Fuerza + 1','—','Chica'],['Katana','6','—','CC','Fuerza + 5','—','Grande'],['Shuriken','6','—','Fuerza + 5','Fuerza','—','Buena'],['Sierra mecánica','8','—','CC','Fuerza + 7','—','Ninguna']
 ];
@@ -214,7 +234,7 @@ reviewSelect.addEventListener('change', () => {
   renderReviews();
 });
 
-reviewForm.addEventListener('submit', event => {
+reviewForm.addEventListener('submit', async event => {
   event.preventDefault();
   const entry = reviewSheets.find(item => item.key === reviewKey);
   if (!entry) return;
@@ -226,6 +246,7 @@ reviewForm.addEventListener('submit', event => {
     reviewStatus('Escribe un comentario o asigna puntos de experiencia.');
     return;
   }
+  if (entry.cloud) {await sendCampaignReview(entry.key,feedback,general,nen);return;}
   const review = {format:'yorknew-review-v1',id:crypto.randomUUID(),date:new Date().toISOString(),
     sheetId:entry.sheet.sheetId || '',name:entry.sheet.name.trim(),feedback,general,nen};
   try {
@@ -266,9 +287,253 @@ async function applyReview(input) {
     const reviews = Array.isArray(d.narratorReviews) ? d.narratorReviews : [];
     if (reviews.some(review => review.id === item.id)) throw new Error('Esta revisión ya fue aplicada.');
     const next = {...d,xp:(Number(d.xp) || 0) + item.general,xpNen:(Number(d.xpNen) || 0) + item.nen,narratorReviews:[...reviews,item]};
-    localStorage.setItem('yorknew_char',JSON.stringify(next));
+    localStorage.setItem(campaignDraftKey || 'yorknew_char',JSON.stringify(next));
     d = next;
     render();
   } catch (error) {alert(error.message)}
 }
-render();</script></html>
+let campaignDraftKey = '';
+let campaignUser = null;
+let campaignRole = '';
+let campaignSheet = null;
+let campaignRows = [];
+const appElement = id => document.getElementById(id);
+const campaignMessage = message => {appElement('campaignStatus').textContent = message};
+const loginMessage = message => {appElement('campaignLoginStatus').textContent = message};
+const campaignUrl = 'https://envecc.github.io/hunter-x-hunter-yorknew/';
+const campaignClient = window.supabase?.createClient(
+  'https://opgeoypphvoyeuppkafm.supabase.co',
+  'sb_publishable_IoVXDZOjL9YTp1C-WBCCWQ_0Ge1ifUX'
+);
+
+function cloudResult(result) {
+  if (result.error) throw new Error(result.error.message);
+  return result.data;
+}
+
+async function openCampaign(session) {
+  appElement('campaignApp').hidden = true;
+  appElement('campaignSignIn').hidden = false;
+  campaignUser = null;
+  campaignRole = '';
+  campaignDraftKey = '';
+  campaignRows = [];
+  campaignSheet = null;
+  if (!session) return;
+  const user = cloudResult(await campaignClient.auth.getUser()).user;
+  const membership = cloudResult(await campaignClient.from('yorknew_members')
+    .select('role').eq('user_id',user.id).maybeSingle());
+  if (!membership) {
+    loginMessage('Este correo aún no tiene acceso a la campaña.');
+    await campaignClient.auth.signOut({scope:'local'});
+    return;
+  }
+  campaignUser = user;
+  campaignRole = membership.role;
+  campaignDraftKey = 'yorknew_char:' + user.id;
+  reviewSheets = [];
+  reviewKey = '';
+  appElement('reviewFiles').disabled = true;
+  appElement('campaignRole').textContent = campaignRole === 'narrator' ? 'Narrador' : 'Jugador';
+  appElement('campaignPlayer').hidden = campaignRole !== 'player';
+  appElement('switch-character').hidden = campaignRole !== 'player';
+  appElement('switch-market').hidden = campaignRole !== 'player';
+  appElement('switch-narrator').hidden = campaignRole !== 'narrator';
+  appElement('campaignAwards').replaceChildren();
+  appElement('campaignHistory').replaceChildren();
+  campaignMessage('');
+  d = fresh();
+  if (campaignRole === 'player') {
+    appElement('campaignLegacy').hidden = !localStorage.getItem('yorknew_char');
+    try {d = {...fresh(),...JSON.parse(localStorage.getItem(campaignDraftKey))}} catch {}
+    render();
+  }
+  switchPage(campaignRole === 'narrator' ? 'narrator' : 'character');
+  appElement('campaignSignIn').hidden = true;
+  appElement('campaignApp').hidden = false;
+  await refreshCampaign();
+}
+
+async function refreshCampaign() {
+  campaignRows = cloudResult(await campaignClient.from('yorknew_sheets').select('id,sheet,updated_at')
+    .order('updated_at',{ascending:false}));
+  if (campaignRole === 'narrator') {
+    reviewSheets = campaignRows.map(row => ({key:row.id,cloud:true,sheet:row.sheet,reviews:[]}));
+    if (!reviewSheets.some(row => row.key === reviewKey)) reviewKey = reviewSheets[0]?.key || '';
+    renderReviews();
+    await loadCampaignReviews();
+  } else {
+    const selected = appElement('campaignSheets').value;
+    appElement('campaignSheets').replaceChildren(new Option('Elige una ficha',''),...campaignRows.map(row =>
+      new Option(row.sheet.name || 'Personaje sin nombre',row.id)));
+    if (selected && campaignRows.some(row => row.id === selected)) appElement('campaignSheets').value = selected;
+  }
+}
+
+async function loadCampaignReviews() {
+  if (!reviewKey) return;
+  const key = reviewKey;
+  const rows = cloudResult(await campaignClient.from('yorknew_reviews').select('*').eq('sheet_id',key).order('created_at'));
+  const entry = reviewSheets.find(item => item.key === key);
+  if (entry && reviewKey === key) {
+    entry.reviews = rows.map(campaignReview);
+    appElement('reviewHistory').innerHTML = reviewHistory(entry.reviews);
+  }
+}
+
+function campaignReview(row) {
+  return {id:row.id,date:row.created_at,feedback:row.feedback,general:row.general_px,nen:row.nen_px};
+}
+
+async function sendCampaignReview(sheetId,feedback,general,nen) {
+  const button = reviewForm.querySelector('button.primary');
+  button.disabled = true;
+  try {
+    cloudResult(await campaignClient.from('yorknew_reviews').insert({
+      sheet_id:sheetId,feedback,general_px:general,nen_px:nen
+    }));
+    reviewForm.reset();
+    reviewStatus('Revisión enviada a la ficha del jugador.');
+    await loadCampaignReviews();
+  } catch (error) {reviewStatus(error.message)}
+  finally {button.disabled = false}
+}
+
+function resetCampaignSheet() {
+  campaignSheet = null;
+  appElement('campaignSheets').value = '';
+  appElement('campaignAwards').replaceChildren();
+  appElement('campaignHistory').replaceChildren();
+}
+
+async function showCampaignAwards() {
+  const current = campaignSheet;
+  const rows = cloudResult(await campaignClient.from('yorknew_reviews').select('*').eq('sheet_id',current.id).order('created_at'));
+  if (campaignSheet !== current) return;
+  const panel = appElement('campaignAwards');
+  panel.innerHTML = '<h3>Revisiones del narrador</h3>' + reviewHistory(rows.map(campaignReview));
+  const pending = rows.filter(row => !(d.narratorReviews || []).some(item => item.id === row.id));
+  if (!pending.length) return;
+  const button = document.createElement('button');
+  button.textContent = 'Aplicar revisiones pendientes';
+  button.onclick = () => campaignAction(button,async () => {
+    const applied = (d.narratorReviews || []);
+    const freshAwards = pending.filter(row => !applied.some(item => item.id === row.id)).map(campaignReview);
+    const next = {...d,narratorReviews:[...applied,...freshAwards],
+      xp:(Number(d.xp)||0)+freshAwards.reduce((sum,item)=>sum+item.general,0),
+      xpNen:(Number(d.xpNen)||0)+freshAwards.reduce((sum,item)=>sum+item.nen,0)};
+    await storeCampaignSheet(next);
+    d = next;
+    save();
+    render();
+    await showCampaignAwards();
+  });
+  panel.append(button);
+}
+
+async function storeCampaignSheet(sheet) {
+  if (!sheet.name?.trim()) throw new Error('Escribe el nombre de tu personaje antes de guardar.');
+  const query = campaignClient.from('yorknew_sheets');
+  if (campaignSheet) {
+    const updated = cloudResult(await query.update({sheet}).eq('id',campaignSheet.id)
+      .eq('updated_at',campaignSheet.updated_at).select('id,updated_at').maybeSingle());
+    if (!updated) throw new Error('La ficha cambió en otra sesión. Exporta tu borrador y vuelve a abrir la ficha guardada.');
+    campaignSheet = updated;
+  } else {
+    campaignSheet = cloudResult(await query.insert({sheet}).select('id,updated_at').single());
+  }
+  campaignMessage('Ficha guardada en la campaña.');
+}
+
+async function campaignAction(button, action) {
+  button.disabled = true;
+  try {await action()}
+  catch (error) {campaignMessage(error.message)}
+  finally {button.disabled = false}
+}
+
+function campaignButton(id,action) {
+  const button = appElement(id);
+  button.addEventListener('click',()=>campaignAction(button,action));
+}
+
+campaignButton('campaignRefresh',refreshCampaign);
+campaignButton('campaignLogout',async () => {
+  cloudResult(await campaignClient.auth.signOut({scope:'local'}));
+  location.replace(campaignUrl);
+});
+campaignButton('campaignOpen',async () => {
+  const id = appElement('campaignSheets').value;
+  if (!id) return;
+  const row = cloudResult(await campaignClient.from('yorknew_sheets').select('id,sheet,updated_at').eq('id',id).single());
+  campaignSheet = {id:row.id,updated_at:row.updated_at};
+  d = {...fresh(),...row.sheet};
+  save();
+  render();
+  appElement('campaignHistory').replaceChildren();
+  campaignMessage('Ficha abierta.');
+  await showCampaignAwards();
+});
+campaignButton('campaignStore',async () => {
+  await storeCampaignSheet(d);
+  await refreshCampaign();
+  appElement('campaignSheets').value = campaignSheet.id;
+  await showCampaignAwards();
+});
+campaignButton('campaignLegacy',async () => {
+  const oldSheet = JSON.parse(localStorage.getItem('yorknew_char'));
+  if (!oldSheet || !confirm('¿Cargar como borrador la ficha anterior guardada en este navegador?')) return;
+  campaignSheet = null;
+  appElement('campaignSheets').value = '';
+  appElement('campaignAwards').replaceChildren();
+  appElement('campaignHistory').replaceChildren();
+  d = {...fresh(),...oldSheet};
+  save();
+  render();
+  campaignMessage('Ficha recuperada como borrador. Guárdala para compartirla con el narrador.');
+});
+campaignButton('campaignVersions',async () => {
+  if (!campaignSheet) throw new Error('Abre una ficha guardada para ver el historial.');
+  const versions = cloudResult(await campaignClient.from('yorknew_sheet_versions')
+    .select('id,sheet,saved_at').eq('sheet_id',campaignSheet.id).order('saved_at',{ascending:false}).limit(25));
+  const panel = appElement('campaignHistory');
+  panel.replaceChildren();
+  if (!versions.length) panel.textContent = 'La ficha aún no tiene versiones anteriores.';
+  for (const version of versions) {
+    const button = document.createElement('button');
+    button.textContent = 'Cargar borrador del ' + new Date(version.saved_at).toLocaleString('es-CL');
+    button.onclick = () => {
+      if (!confirm('¿Cargar esta versión como borrador? Puedes guardar la ficha después de revisarla.')) return;
+      d = {...fresh(),...version.sheet,xp:d.xp,xpNen:d.xpNen,narratorReviews:d.narratorReviews};
+      save();
+      render();
+      campaignMessage('Versión cargada como borrador.');
+    };
+    panel.append(button);
+  }
+});
+
+reviewSelect.addEventListener('change',()=>{
+  if (campaignRole === 'narrator') loadCampaignReviews().catch(error=>reviewStatus(error.message));
+});
+
+appElement('campaignLogin').addEventListener('submit',async event => {
+  event.preventDefault();
+  if (!campaignClient) return;
+  const button = event.currentTarget.querySelector('button');
+  const email = new FormData(event.currentTarget).get('email').trim();
+  button.disabled = true;
+  try {
+    cloudResult(await campaignClient.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:campaignUrl}}));
+    loginMessage('Revisa el correo para abrir el enlace de acceso.');
+  } catch {loginMessage('No se pudo enviar el enlace. Confirma que el correo fue invitado o contacta al narrador.')}
+  finally {button.disabled = false}
+});
+
+if (campaignClient) {
+  campaignClient.auth.getSession().then(result=>openCampaign(cloudResult(result).session))
+    .catch(()=>loginMessage('No se pudo conectar con la campaña. Intenta recargar la página.'));
+} else {
+  loginMessage('No se pudo cargar el servicio de acceso. Intenta recargar la página.');
+}
+</script></html>
