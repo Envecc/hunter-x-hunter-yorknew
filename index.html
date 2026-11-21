@@ -8,6 +8,7 @@
 <section class="panel" id="campaignAccount">
   <button id="campaignLogout" type="button">Cerrar sesión</button>
   <span id="campaignRole"></span>
+  <label id="campaignProfileControl" hidden>Perfil activo<select id="campaignProfile"><option value="narrator">Narrador</option><option value="player">Jugador</option></select></label>
   <div id="campaignPlayer" hidden>
     <label>Fichas guardadas<select id="campaignSheets"></select></label>
     <button id="campaignOpen" type="button">Abrir ficha</button>
@@ -394,6 +395,7 @@ async function applyReview(input) {
 let campaignDraftKey = '';
 let campaignUser = null;
 let campaignRole = '';
+let campaignCanNarrate = false;
 let campaignSheet = null;
 let campaignRows = [];
 const appElement = id => document.getElementById(id);
@@ -428,36 +430,43 @@ async function openCampaign(session) {
     return;
   }
   campaignUser = user;
-  campaignRole = membership.role;
+  campaignCanNarrate = membership.role === 'narrator';
   campaignDraftKey = 'yorknew_char:' + user.id;
   reviewSheets = [];
   reviewKey = '';
   appElement('reviewFiles').disabled = true;
-  appElement('campaignRole').textContent = campaignRole === 'narrator' ? 'Narrador' : 'Jugador';
-  appElement('campaignPlayer').hidden = campaignRole !== 'player';
-  appElement('switch-character').hidden = campaignRole !== 'player';
-  appElement('switch-market').hidden = campaignRole !== 'player';
-  appElement('switch-experience').hidden = campaignRole !== 'player';
-  appElement('switch-narrator').hidden = campaignRole !== 'narrator';
-  appElement('campaignAwards').replaceChildren(); appElement('campaignAwards').hidden = true;
-  appElement('campaignHistory').replaceChildren();
-  campaignMessage('');
+  appElement('campaignProfileControl').hidden = !campaignCanNarrate;
+  appElement('campaignLegacy').hidden = !localStorage.getItem('yorknew_char');
   d = fresh();
-  if (campaignRole === 'player') {
-    appElement('campaignLegacy').hidden = !localStorage.getItem('yorknew_char');
-    try {d = {...fresh(),...JSON.parse(localStorage.getItem(campaignDraftKey))}} catch {}
-    render();
-  }
-  switchPage(campaignRole === 'narrator' ? 'narrator' : 'character');
+  try {d = {...fresh(),...JSON.parse(localStorage.getItem(campaignDraftKey))}} catch {}
   appElement('campaignSignIn').hidden = true;
   appElement('campaignApp').hidden = false;
-  await refreshCampaign();
+  await selectCampaignProfile(campaignCanNarrate ? 'narrator' : 'player');
 }
 
+async function selectCampaignProfile(role) {
+  if (!campaignUser || (role === 'narrator' && !campaignCanNarrate)) return;
+  campaignRole = role;
+  const isPlayer = role === 'player';
+  appElement('campaignProfile').value = role;
+  appElement('campaignRole').textContent = isPlayer ? 'Jugador' : 'Narrador';
+  for (const id of ['campaignPlayer','switch-character','switch-market','switch-experience']) {
+    appElement(id).hidden = !isPlayer;
+  }
+  appElement('switch-narrator').hidden = isPlayer;
+  campaignMessage('');
+  if (isPlayer) render();
+  switchPage(isPlayer ? 'character' : 'narrator');
+  await refreshCampaign();
+}
 async function refreshCampaign() {
-  campaignRows = cloudResult(await campaignClient.from('yorknew_sheets').select('id,sheet,updated_at')
-    .order('updated_at',{ascending:false}));
-  if (campaignRole === 'narrator') {
+  const role = campaignRole;
+  let query = campaignClient.from('yorknew_sheets').select('id,sheet,updated_at');
+  if (role === 'player') query = query.eq('owner_id',campaignUser.id);
+  const rows = cloudResult(await query.order('updated_at',{ascending:false}));
+  if (role !== campaignRole) return;
+  campaignRows = rows;
+  if (role === 'narrator') {
     reviewSheets = campaignRows.map(row => ({key:row.id,cloud:true,sheet:row.sheet,reviews:[]}));
     if (!reviewSheets.some(row => row.key === reviewKey)) reviewKey = reviewSheets[0]?.key || '';
     renderReviews();
@@ -475,7 +484,7 @@ async function loadCampaignReviews() {
   const key = reviewKey;
   const rows = cloudResult(await campaignClient.from('yorknew_reviews').select('*').eq('sheet_id',key).order('created_at'));
   const entry = reviewSheets.find(item => item.key === key);
-  if (entry && reviewKey === key) {
+  if (campaignRole === 'narrator' && entry && reviewKey === key) {
     entry.reviews = rows.map(campaignReview);
     appElement('reviewHistory').innerHTML = reviewHistory(entry.reviews);
   }
@@ -558,6 +567,11 @@ function campaignButton(id,action) {
   button.addEventListener('click',()=>campaignAction(button,action));
 }
 
+appElement('campaignProfile').addEventListener('change', event => {
+  const select = event.currentTarget;
+  campaignAction(select,() => selectCampaignProfile(select.value));
+});
+
 campaignButton('campaignRefresh',refreshCampaign);
 campaignButton('campaignLogout',async () => {
   cloudResult(await campaignClient.auth.signOut({scope:'local'}));
@@ -566,7 +580,7 @@ campaignButton('campaignLogout',async () => {
 campaignButton('campaignOpen',async () => {
   const id = appElement('campaignSheets').value;
   if (!id) return;
-  const row = cloudResult(await campaignClient.from('yorknew_sheets').select('id,sheet,updated_at').eq('id',id).single());
+  const row = cloudResult(await campaignClient.from('yorknew_sheets').select('id,sheet,updated_at').eq('id',id).eq('owner_id',campaignUser.id).single());
   campaignSheet = {id:row.id,updated_at:row.updated_at};
   d = {...fresh(),...row.sheet};
   save();
