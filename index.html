@@ -76,8 +76,85 @@ function allowed(k){return ({En:d.nen.Ten>=2&&d.nen.Ren>=2,Gyo:d.nen.Ren>=2,In:d
 function field(k,label,type='text'){return `<label>${label}<input type="${type}" value="${esc(d[k])}" onchange="set('${k}',this.value)"></label>`}function esc(x){return String(x??'').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;')}
 function rows(names,kind){return names.map(k=>{let n=d[kind][k]||0;return `<div class="trait"><span>${esc(k)} <small>${kind==='paths'?((caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20)+'% máx.':''}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)">−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)">+</button></span></div>`}).join('')}
 function traitConflict(name){return ({'Corpulento':['Bajo','Niño'],'Bajo':['Corpulento'],'Niño':['Corpulento'],'Elástico':['Cojera'],'Cojera':['Elástico']})[name]||[]}
-function toggle(kind,name,cost){let arr=d[kind],i=arr.findIndex(x=>x.name===name);if(i>=0){arr.splice(i,1)}else{let item=traitCatalog.find(x=>x.kind===kind&&x.name===name);if(!item)return;if(item.category==='Méritos Hatsu'){if(d.hatsu<1||d.nen.Ten<1){alert('Debes haber despertado Nen y poseer Ten para adquirir este mérito.');return}if(item.affinity!==d.affinity){alert('Este mérito exige afinidad '+item.affinity);return}if(d.merits.filter(x=>traitCatalog.some(t=>t.name===x.name&&t.category==='Méritos Hatsu')).length>=2){alert('Máximo dos méritos Hatsu');return}}let selected=[...d.merits,...d.defects].map(x=>x.name);if(traitConflict(name).some(x=>selected.includes(x))){alert('Selección incompatible con otro rasgo: '+traitConflict(name).filter(x=>selected.includes(x)).join(', '));return}arr.push({name,cost})}save();render()}
-function catalog(kind,items){let selected=d[kind];let groups=[...new Set(items.map(x=>x.category))];return `<label class="catalog-label">Buscar ${kind==='merits'?'mérito':'defecto'}<input id="search-${kind}" placeholder="Nombre o efecto" oninput="filterCatalog('${kind}',this.value)"></label><label>Categoría<select id="category-${kind}" onchange="filterCatalog('${kind}',document.getElementById('search-${kind}').value)"><option value="">Todas las categorías</option>${groups.map(g=>`<option>${esc(g)}</option>`).join('')}</select></label><div id="catalog-${kind}">${groups.map(group=>`<details class="trait-group" ${group==='Méritos Hatsu'?'':'open'}><summary>${esc(group)} · ${items.filter(x=>x.category===group).length}</summary>${items.filter(x=>x.category===group).map(item=>{let {name,min,max,affinity,description}=item;let found=selected.find(x=>x.name===name),chosen=!!found;let cost=found?found.cost:min;return `<details class="catalog-entry" data-search="${esc((name+' '+description).toLowerCase())}" data-category="${esc(group)}"><summary>${esc(name)} ${chosen?'✓':''} <small> · ${min===max?min:min+'–'+max} PG${affinity?' · '+affinity:''}</small></summary><p class="trait-description">${esc(description||'El manual no precisa una descripción adicional; consulta con el narrador.')}</p>${min!==max?`<label>Valor del rasgo (a acordar con el narrador)<select id="cost-${kind}-${items.indexOf(item)}">${Array.from({length:max-min+1},(_,i)=>`<option value="${i+min}" ${cost===i+min?'selected':''}>${i+min} PG</option>`).join('')}</select></label>`:''}<button class="${chosen?'primary':''}" onclick="toggle('${kind}',${JSON.stringify(name)},${min===max?min:`Number(document.getElementById('cost-${kind}-${items.indexOf(item)}').value)`})">${chosen?'Quitar selección':'Seleccionar '+(kind==='merits'?'mérito':'defecto')}</button>${affinity&&affinity!==d.affinity?'<p class="bad">No corresponde a la afinidad actual.</p>':''}</details>`}).join('')}</details>`).join('')}</div>`}
+const traitLimits = {merits:9,defects:3};
+const traitLabels = {merits:'mérito',defects:'defecto'};
+
+function chooseTrait(kind,index,catalogIndex,cost) {
+  const selected = d[kind];
+  const current = selected[index];
+  if (catalogIndex === null) {
+    if (!current) return false;
+    selected.splice(index,1);
+  } else {
+    const item = traitCatalog[catalogIndex];
+    if (!item || item.kind !== kind) return false;
+    const others = selected.filter((_,position) => position !== index);
+    const otherKind = kind === 'merits' ? 'defects' : 'merits';
+    const fail = message => {alert(message);return false};
+    if (!current && selected.length >= traitLimits[kind]) {
+      return fail('Máximo ' + traitLimits[kind] + ' ' + traitLabels[kind] + 's.');
+    }
+    if (current?.name !== item.name) {
+      if (others.some(trait => trait.name === item.name)) return fail('Ya elegiste este rasgo.');
+      if (item.category === 'Méritos Hatsu') {
+        if (d.hatsu < 1 || d.nen.Ten < 1) return fail('Debes haber despertado Nen y poseer Ten para adquirir este mérito.');
+        if (item.affinity !== d.affinity) return fail('Este mérito exige afinidad ' + item.affinity);
+        if (others.filter(trait => traitCatalog.some(entry => entry.name === trait.name && entry.category === 'Méritos Hatsu')).length >= 2) {
+          return fail('Máximo dos méritos Hatsu.');
+        }
+      }
+      const names = [...others,...d[otherKind]].map(trait => trait.name);
+      const conflicts = names.filter(name => traitConflict(item.name).includes(name) || traitConflict(name).includes(item.name));
+      if (conflicts.length) return fail('Selección incompatible: ' + conflicts.join(', '));
+    }
+    selected[Math.min(index,selected.length)] = {name:item.name,cost:cost ?? item.min};
+  }
+  save();
+  render();
+  return true;
+}
+
+function toggle(kind,catalogIndex,cost) {
+  const item = traitCatalog[catalogIndex];
+  const position = d[kind].findIndex(trait=>trait.name===item.name);
+  chooseTrait(kind,position < 0 ? d[kind].length : position,position < 0 ? catalogIndex : null,cost);
+}
+
+function updateTraitSlot(kind,index,select) {
+  if (!chooseTrait(kind,index,select.value === '' ? null : Number(select.value))) {
+    select.value = traitCatalog.findIndex(item => item.kind === kind && item.name === d[kind][index]?.name);
+    if (select.value === '') select.selectedIndex = 0;
+  }
+}
+
+function traitSlots(kind,items) {
+  const selected = d[kind];
+  const limit = traitLimits[kind];
+  const label = traitLabels[kind];
+  const groups = [...new Set(items.map(item => item.category))];
+  return `<p><strong>${selected.length} / ${limit}</strong> ${label}s elegidos</p>
+    ${selected.length > limit ? `<p class="bad">Esta ficha supera el límite. Quita ${selected.length-limit} para volver al máximo permitido.</p>` : ''}
+    <div class="grid">${Array.from({length:Math.max(limit,selected.length)},(_,index) => {
+      const current = selected[index];
+      const catalogIndex = traitCatalog.findIndex(item => item.kind === kind && item.name === current?.name);
+      const item = traitCatalog[catalogIndex];
+      const locked = !current && selected.length >= limit;
+      return `<div><label>${kind==='merits'?'Mérito':'Defecto'} ${index+1}
+          <select onchange="updateTraitSlot('${kind}',${index},this)" ${locked?'disabled':''}>
+            <option value="">Sin seleccionar</option>
+            ${current && !item ? `<option value="-1" selected>${esc(current.name)}</option>` : ''}
+            ${groups.map(group => `<optgroup label="${esc(group)}">${items.filter(entry=>entry.category===group).map(entry=>{
+              const value = traitCatalog.indexOf(entry);
+              const used = selected.some((trait,position)=>position!==index && trait.name===entry.name);
+              return `<option value="${value}" ${value===catalogIndex?'selected':''} ${used?'disabled':''}>${esc(entry.name)} (${entry.min===entry.max?entry.min:entry.min+'–'+entry.max} PG)</option>`;
+            }).join('')}</optgroup>`).join('')}
+          </select></label>
+          ${item && item.min!==item.max ? `<label>Valor de ${esc(item.name)}<select onchange="chooseTrait('${kind}',${index},${catalogIndex},Number(this.value))">
+            ${Array.from({length:item.max-item.min+1},(_,i)=>`<option value="${i+item.min}" ${current.cost===i+item.min?'selected':''}>${i+item.min} PG</option>`).join('')}
+          </select></label>` : ''}</div>`;
+    }).join('')}</div>`;
+}
+function catalog(kind,items){let selected=d[kind];let groups=[...new Set(items.map(x=>x.category))];return traitSlots(kind,items)+`<label class="catalog-label">Buscar ${kind==='merits'?'mérito':'defecto'}<input id="search-${kind}" placeholder="Nombre o efecto" oninput="filterCatalog('${kind}',this.value)"></label><label>Categoría<select id="category-${kind}" onchange="filterCatalog('${kind}',document.getElementById('search-${kind}').value)"><option value="">Todas las categorías</option>${groups.map(g=>`<option>${esc(g)}</option>`).join('')}</select></label><div id="catalog-${kind}">${groups.map(group=>`<details class="trait-group" ${group==='Méritos Hatsu'?'':'open'}><summary>${esc(group)} · ${items.filter(x=>x.category===group).length}</summary>${items.filter(x=>x.category===group).map(item=>{let {name,min,max,affinity,description}=item;let found=selected.find(x=>x.name===name),chosen=!!found;let cost=found?found.cost:min;return `<details class="catalog-entry" data-search="${esc((name+' '+description).toLowerCase())}" data-category="${esc(group)}"><summary>${esc(name)} ${chosen?'✓':''} <small> · ${min===max?min:min+'–'+max} PG${affinity?' · '+affinity:''}</small></summary><p class="trait-description">${esc(description||'El manual no precisa una descripción adicional; consulta con el narrador.')}</p>${min!==max?`<label>Valor del rasgo (a acordar con el narrador)<select id="cost-${kind}-${items.indexOf(item)}">${Array.from({length:max-min+1},(_,i)=>`<option value="${i+min}" ${cost===i+min?'selected':''}>${i+min} PG</option>`).join('')}</select></label>`:''}<button class="${chosen?'primary':''}" onclick="toggle('${kind}',${traitCatalog.indexOf(item)},${min===max?min:`Number(document.getElementById('cost-${kind}-${items.indexOf(item)}').value)`})">${chosen?'Quitar selección':'Seleccionar '+(kind==='merits'?'mérito':'defecto')}</button>${affinity&&affinity!==d.affinity?'<p class="bad">No corresponde a la afinidad actual.</p>':''}</details>`}).join('')}</details>`).join('')}</div>`}
 function filterCatalog(kind,term){let cat=document.getElementById('category-'+kind)?.value||'';document.querySelectorAll('#catalog-'+kind+' .catalog-entry').forEach(el=>el.hidden=!(el.dataset.search.includes(term.toLowerCase().trim())&&(!cat||el.dataset.category===cat)));document.querySelectorAll('#catalog-'+kind+' .trait-group').forEach(el=>{el.hidden=![...el.querySelectorAll('.catalog-entry')].some(x=>!x.hidden);if(term.trim()||cat)el.open=true})}
 function spend(kind,key){let obj=kind==='hatsu'?null:d[kind];let current=kind==='hatsu'?d.hatsu:(obj[key]||0);let cost=kind==='nen'?current*({En:3,Shu:3,Kou:4,Ken:4,Ryu:5}[key]||2):kind==='paths'?(current+1)*3:kind==='attrs'?(current+1)*5:kind==='skills'?(current+1)*2:kind==='hatsu'?(current+1)*4:current+1;let pool=kind==='nen'?'xpNen':'xp';if(kind==='nen'&&!allowed(key)){alert('No cumple requisitos');return}if(current>=5||d[pool]<cost){alert('Nivel máximo o experiencia insuficiente');return}if(kind==='paths'&&current>=(caps[d.affinity]||caps.Intensificación)[paths.indexOf(key)]){alert('Máximo de afinidad');return}d[pool]-=cost;if(kind==='hatsu')d.hatsu++;else obj[key]=current+1;d.history.push(`${new Date().toLocaleDateString()} · ${key} ${current}→${current+1} · ${cost} ${pool}`);save();render()}
 function progression(names,kind){return names.map(k=>{let n=kind==='hatsu'?d.hatsu:(d[kind][k]||0);let cost=kind==='nen'?n*({En:3,Shu:3,Kou:4,Ken:4,Ryu:5}[k]||2):kind==='paths'?(n+1)*3:kind==='attrs'?(n+1)*5:kind==='skills'?(n+1)*2:kind==='hatsu'?(n+1)*4:n+1;return `<div class="trait"><span>${esc(k)} · ${n}/5 <small>Próximo: ${cost} PX</small></span><button onclick="spend('${kind}','${k}')">Mejorar</button></div>`}).join('')}
