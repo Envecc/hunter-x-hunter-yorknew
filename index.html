@@ -148,22 +148,30 @@ function ratingCost(value,minimum) {
   return Math.max(0,value-minimum)+(value>=5?1:0);
 }
 
+function creationAllocation(values,total,minimum) {
+  const weight = values.reduce((sum,value)=>sum+ratingCost(value,minimum),0);
+  const fifths = values.filter(value=>value===5).length;
+  const excess = Math.max(0,weight-total);
+  const paidFifths = Math.min(fifths,Math.floor(excess/2));
+  return {used:weight-excess,paid:excess-paidFifths};
+}
+
 function budget(sheet=d) {
   const levels = experienceLevels(sheet);
   const stage = nenStage(sheet.tier);
-  const a = attributes.reduce((total,key)=>total+ratingCost(creationRating(sheet.attrs[key],key,levels,1),1),0);
-  const s = allSkills.reduce((total,key)=>total+ratingCost(creationRating(sheet.skills[key],key,levels),0),0);
+  const attrs = creationAllocation(attributes.map(key=>creationRating(sheet.attrs[key],key,levels,1)),creationCaps.attrs,1);
+  const skills = creationAllocation(allSkills.map(key=>creationRating(sheet.skills[key],key,levels)),creationCaps.skills,0);
   const nenBase = basicNen.reduce((total,key)=>total+creationRating(sheet.nen[key],key,levels),0);
   const nenAdvanced = nen.filter(key=>!basicNen.includes(key)).reduce((total,key)=>total+creationRating(sheet.nen[key],key,levels),0);
   const spent = {
-    attrs:Math.max(0,a-creationCaps.attrs)*creationCosts.attrs,
-    skills:Math.max(0,s-creationCaps.skills)*creationCosts.skills,
+    attrs:attrs.paid*creationCosts.attrs,
+    skills:skills.paid*creationCosts.skills,
     nen:(Math.max(0,nenBase-stage.nen)+nenAdvanced)*creationCosts.nen,
     hatsu:Math.max(0,creationRating(sheet.hatsu,'Hatsu',levels)-stage.hatsu)*creationCosts.hatsu,
     willBonus:creationRating(sheet.willBonus,willHistoryKey,levels),
     reserveBonus:Math.ceil(Math.max(0,integer(sheet.reserveBonus))/3)
   };
-  return {a,s,n:nenBase,nb:stage.nen,nenAdvanced,spent,free:freeCreationPoints-Object.values(spent).reduce((total,value)=>total+value,0)};
+  return {a:attrs.used,s:skills.used,n:nenBase,nb:stage.nen,nenAdvanced,spent,free:freeCreationPoints-Object.values(spent).reduce((total,value)=>total+value,0)};
 }
 
 function creationPoolLabel(used,total) {
@@ -201,10 +209,10 @@ function adjustCreationBonus(key,delta) {
 
 function creationPointPanel() {
   const totals = budget();
-  const entries = [['Atributos','attrs'],['Habilidades','skills'],['Técnicas Nen','nen'],
-    ['Hatsu','hatsu'],['Fuerza de Voluntad','willBonus'],['Reserva Nen','reserveBonus']];
+  const entries = [['Atributos','attrs','5 PG por círculo'],['Habilidades','skills','2 PG por círculo'],['Técnicas Nen','nen','2 PG por círculo'],
+    ['Hatsu','hatsu','4 PG por círculo'],['Fuerza de Voluntad','willBonus','1 PG por círculo'],['Reserva Nen','reserveBonus','3 de aura por 1 PG']];
   return `<div class="panel"><h2>Puntos gratuitos</h2><p><strong>${totals.free} de ${freeCreationPoints} PG disponibles</strong></p>
-    <div class="grid">${entries.map(([name,key])=>`<p>${name} · <b>${totals.spent[key]} PG</b></p>`).join('')}</div>
+    <div class="grid">${entries.map(([name,key,unit])=>`<p>${name} · <b>${totals.spent[key]} PG</b><br><small>${unit}</small></p>`).join('')}</div>
     <div class="trait"><span>Fuerza de Voluntad adicional <small>1 PG por punto</small></span>
       <span class="controls"><button aria-label="Quitar un punto de Voluntad" onclick="adjustCreationBonus('willBonus',-1)">−</button><b>${esc(d.willBonus)}</b><button aria-label="Añadir un punto de Voluntad" onclick="adjustCreationBonus('willBonus',1)">+</button></span></div>
     <div class="trait"><span>Reserva Nen adicional <small>3 de aura por 1 PG</small></span>
@@ -406,8 +414,8 @@ function playerSheetSummary(d) {
   const speed = (Number(d.attrs.Fuerza) || 1) + (Number(d.attrs.Destreza) || 1) + 5;
   return `<h2>${esc(d.name||'Personaje sin nombre')}</h2><p>${esc(d.type)} · ${esc(d.personality)} · ${esc(d.age)} años · Moralidad ${esc(d.morality ?? 3)}</p><p><b>Salud:</b> ${(Number(d.attrs.Resistencia)||1)+(Number(d.height)||5)} · <b>Voluntad:</b> ${(Number(d.attrs.Resistencia)||1)+(Number(d.attrs.Astucia)||1)+(Number(d.willBonus)||0)} · <b>Velocidad:</b> ${speed} · <b>Reserva Nen:</b> ${(Number(d.hatsu)||0)*10+(Number(d.reserveBonus)||0)}</p><p><b>Afinidad:</b> ${esc(d.affinity)} · <b>Hatsu:</b> ${esc(d.hatsu)}</p><p><b>PG disponibles:</b> <span class="${b.free<0?'bad':'ok'}">${b.free}</span></p><div class="grid"><div><h2>Atributos</h2>${attributes.map(x=>`<p>${x}: ${esc(d.attrs[x])}</p>`).join('')}</div><div><h2>Habilidades</h2>${allSkills.filter(x=>d.skills[x]).map(x=>`<p>${x}: ${esc(d.skills[x])}</p>`).join('')}</div><div><h2>Nen</h2>${nen.filter(x=>d.nen[x]).map(x=>`<p>${x}: ${esc(d.nen[x])}</p>`).join('')}<h2>Méritos y defectos</h2>${meritBudgetSummary(d)}${[...d.merits,...d.defects].map(x=>`<p>${esc(x.name)} (${esc(x.cost)})</p>`).join('')}</div></div>`;}
 function render(){const b=budget();document.getElementById('stats').innerHTML=[['Atributos',creationPoolLabel(b.a,12)],['Habilidades',creationPoolLabel(b.s,25)],['Nen inicial',creationPoolLabel(b.n,b.nb)],['Gratuitos',b.free],['PX general',d.xp],['PX Nen',d.xpNen],['Reserva aura',d.hatsu*10+d.reserveBonus]].map(([k,v])=>`<div class="stat"><small>${k}</small><strong class="${typeof v==='number'&&v<0?'bad':''}">${v}</strong></div>`).join('');let tabs=['Identidad','Atributos','Habilidades','Nen y Hatsu','Méritos y defectos','Técnicas','Experiencia','Ficha','Diario de campaña'];document.getElementById('tabs').innerHTML=tabs.map((x,i)=>i===6?'':`<a class="jump" href="#sec${i}">${x}</a>`).join('');let c='';c+=`<section id="sec0" class="sheet-section"><div class="section-title">01 · Identidad</div>`+`<div class="panel"><h2>Identidad del personaje</h2><div class="identity-layout"><div><div class="grid">${field('name','Nombre')}${field('age','Edad','number')}${field('type','Tipo de cazador / ocupación')}${field('personality','Personalidad')}${field('height','Tamaño (normal 5)','number')}<label>Etapa<select onchange="setNenStage(this.value)"><option ${d.tier==='Novato'?'selected':''}>Novato</option><option ${d.tier==='Controlador'?'selected':''}>Controlador</option></select></label><label>Moralidad<input type="number" step="1" value="${esc(d.morality ?? 3)}" onchange="set('morality',this.value===''?3:Math.trunc(Number(this.value)))"></label></div><label>Historia<textarea onchange="set('bio',this.value)">${esc(d.bio)}</textarea></label></div><aside class="identity-photo"><img class="portrait" alt="Retrato del personaje" src="${d.portrait||placeholderPortrait}"><label>Retrato<input type="file" accept="image/*" onchange="uploadPortrait(this)"></label><button onclick="d.portrait='';save();render()">Quitar imagen</button></aside></div></div>`;
-c+=`<section id="sec1" class="sheet-section"><div class="section-title">02 · Atributos</div>`+priorityPanel('attrs')+`<div class="grid">${[['Físicos',attributes.slice(0,3)],['Sociales',attributes.slice(3,6)],['Mentales',attributes.slice(6)]].map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'attrs')}</div>`).join('')}</div><div class="notice">Reparte 12 puntos entre todos los atributos. El quinto círculo cuesta 2 puntos. Cada punto de reparto adicional cuesta 5 PG.</div>`;
-c+=`<section id="sec2" class="sheet-section"><div class="section-title">03 · Habilidades</div>`+priorityPanel('skills')+`<div class="grid">${Object.entries(skills).map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'skills')}</div>`).join('')}</div><div class="notice">Reparte 25 puntos entre todas las habilidades. El quinto círculo cuesta 2 puntos. Cada punto de reparto adicional cuesta 2 PG.</div>`;
+c+=`<section id="sec1" class="sheet-section"><div class="section-title">02 · Atributos</div>`+priorityPanel('attrs')+`<div class="grid">${[['Físicos',attributes.slice(0,3)],['Sociales',attributes.slice(3,6)],['Mentales',attributes.slice(6)]].map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'attrs')}</div>`).join('')}</div><div class="notice">Reparte 12 puntos entre todos los atributos. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 5 PG.</div>`;
+c+=`<section id="sec2" class="sheet-section"><div class="section-title">03 · Habilidades</div>`+priorityPanel('skills')+`<div class="grid">${Object.entries(skills).map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'skills')}</div>`).join('')}</div><div class="notice">Reparte 25 puntos entre todas las habilidades. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 2 PG.</div>`;
 c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Nen y Hatsu</div>`+`<div class="grid"><div class="panel"><h2>Técnicas Nen</h2><p><b>${creationPoolLabel(b.n,b.nb)}</b></p><p class="sub">Reparte los puntos iniciales entre Ten, Ren y Zetsu. Las técnicas avanzadas requieren sus condiciones y cuestan 2 PG por círculo al crear.</p>${nenTechniqueRows()}</div><div class="panel"><h2>Afinidad y caminos</h2><label>Afinidad<select onchange="set('affinity',this.value)">${paths.map(x=>`<option ${d.affinity===x?'selected':''}>${x}</option>`).join('')}</select></label>${rows(paths,'paths')}<div class="trait">Hatsu general <small>${nenStage(d.tier).hatsu} inicial · 4 PG por punto adicional</small> <span class="controls"><button onclick="adjustCreationBonus('hatsu',-1)">−</button>${d.hatsu}<button onclick="adjustCreationBonus('hatsu',1)">+</button></span></div>${affinityDiagram()}</div></div>${creationPointPanel()}<div class="notice">Requisitos de técnicas avanzadas verificados al aumentar. Los caminos Hatsu se desarrollan con PX generales desde Experiencia.</div>`;
 c+=`<section id="sec4" class="sheet-section"><div class="section-title">05 · Méritos y defectos</div>`+`<div class="grid"><div class="panel"><h2>Méritos</h2>${meritBudgetSummary()}${catalog('merits',merits)}</div><div class="panel"><h2>Defectos</h2>${catalog('defects',defects)}</div></div><div class="notice">Cada punto aportado por un defecto suma un punto al presupuesto de méritos. El narrador debe validar coherencia y restricciones. Los méritos Hatsu requieren Nen, afinidad correspondiente y tienen límite de dos. Los rasgos con coste variable necesitan acuerdo con el narrador.</div>`;
 c+=`<section id="sec5" class="sheet-section"><div class="section-title">06 · Técnicas</div>`+`<div class="panel"><h2>Diseñador de técnicas especiales Nen</h2><div class="grid"><label>Nombre<input id="tn" placeholder="Nombre de técnica"></label><label>Requisitos / caminos<input id="tr" placeholder="Ej. Emisión 3 + Control 3"></label><label>Costo aura acordado<input id="tc" type="number" min="0"></label><label>Condiciones y compromisos<textarea id="td"></textarea></label></div><button class="primary" onclick="addTech()">Añadir técnica</button><div class="notice">El manual deja el costo de aura y la complejidad de cada técnica a criterio del narrador; aquí se registran, no se inventan.</div>${d.techniques.map((x,i)=>`<div class="trait"><span><b>${esc(x.name)}</b><br><small>${esc(x.requirements)} · ${esc(x.cost)} aura · ${esc(x.conditions)}</small></span><button onclick="d.techniques.splice(${i},1);save();render()">Eliminar</button></div>`).join('')}</div>`;
