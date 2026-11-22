@@ -28,7 +28,12 @@
 .will-box:has(input:disabled){opacity:.45}.will-box input[type="checkbox"]{width:auto;margin:0;accent-color:#efd18a}
 .character-resources h3{margin:12px 0 5px}
 
-.will-permanent{display:flex;gap:.45rem;flex-wrap:wrap;color:#f6d58a}
+.will-permanent,.will-boxes{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px;max-width:390px}
+.will-permanent span{display:grid;place-items:center;font-size:1.25rem;color:#8997a4}
+.will-permanent .will-active{color:#69db8f}
+.will-boxes .will-box{justify-content:center;min-width:0;padding:0;cursor:pointer}
+.will-boxes input[type="checkbox"]{inline-size:1.05rem;block-size:1.05rem;accent-color:#69db8f}
+.will-boxes .will-box:has(:disabled){cursor:default}
 </style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · V16 · cambios y costos en tiempo real</div></header>
 <section class="panel" id="campaignSignIn">
   <h2>Entrar a la campaña</h2><p>Si ya aceptaste tu invitación, tu cuenta está habilitada. Si cerraste sesión o cambiaste de navegador, pide un enlace para volver a entrar.</p>
@@ -661,13 +666,13 @@ function characterResourceControls(sheet,editable=false) {
   return `<section class="character-resources">
     <h3>Fuerza de Voluntad</h3>
     <div class="will-permanent" aria-label="Voluntad permanente ${will} de ${maxWillpower}">
-      ${Array.from({length:maxWillpower},(_,i)=>`<span aria-hidden="true">${i<will?'●':'○'}</span>`).join('')}
+      ${Array.from({length:maxWillpower},(_,i)=>`<span class="${i<will?'will-active':''}" aria-hidden="true">${i<will?'●':'○'}</span>`).join('')}
     </div>
-    <p><strong>${will-marks.length} / ${will}</strong> disponibles · ${marks.length} gastados</p>
     ${editable ? `<div class="will-boxes" role="group" aria-label="Puntos de Voluntad gastados">
-      ${Array.from({length:maxWillpower},(_,i)=>`<label class="will-box"><input type="checkbox" data-resource-focus="will-${i+1}" aria-label="Punto ${i+1} ${i<will?'gastado':'fuera de la reserva'}" ${i>=will?'disabled':''} ${marks.includes(i+1)?'checked':''} onchange="markWillSpent(${i+1},this.checked,this)"><span>${i+1}</span></label>`).join('')}
+      ${Array.from({length:maxWillpower},(_,i)=>`<label class="will-box"><input type="checkbox" data-resource-focus="will-${i+1}" aria-label="Punto ${i+1} de Voluntad gastado" ${i>=will?'disabled':''} ${marks.includes(i+1)?'checked':''} onchange="markWillSpent(${i+1},this.checked,this)"></label>`).join('')}
     </div>` : ''}
-    ${editable ? '<p class="sub">Marca al gastar un punto y desmarca al recuperarlo. Las casillas grises superan tu reserva.</p>' : ''}
+    <p><strong>${will-marks.length} / ${will}</strong> disponibles · ${marks.length} gastados</p>
+    ${editable ? '<p class="sub">Los círculos verdes muestran tu Voluntad permanente. Marca una casilla si gastas un punto fuera del tirador y desmárcala cuando lo recuperes. En Dados, gastar 1 punto asegura 1 éxito automático.</p>' : ''}
     <div class="grid">
       <div><h3>Moralidad</h3>
         ${editable ? `<label>Valor actual<input data-resource-focus="morality" type="number" step="1" value="${morality}" onchange="changeCharacterResource('morality',this)"></label><p class="sub">Empieza en 3 y cambia según las acciones del personaje.</p>` : `<p>${morality}</p>`}
@@ -1040,7 +1045,9 @@ function dicePanel() {
       <label id="diceManual" hidden>Número de dados<input id="diceCount" type="number" min="1" max="100" step="1" value="5"></label>
       <div class="grid">
         <label>Dificultad<input id="diceDiff" type="number" min="2" max="10" step="1" value="7" required></label>
-        <label>Éxitos automáticos<input id="diceBonus" type="number" min="0" max="100" step="1" value="0" required></label>
+        <label>Otros éxitos automáticos<input id="diceBonus" type="number" min="0" max="100" step="1" value="0" required></label>
+    <label><input id="diceWillpower" type="checkbox" style="width:auto"> Gastar 1 punto de Voluntad (+1 éxito asegurado)</label>
+    <p id="diceWillpowerBalance" class="sub" aria-live="polite"></p>
       </div>
       <label>Motivo<input id="diceLabel" maxlength="120" placeholder="Ej. Pasar desapercibido"></label>
       ${diceTraitPanel()}<button class="primary">Lanzar dados</button>
@@ -1075,29 +1082,57 @@ function diceRoll(event) {
     alert('Con los ajustes, la tirada debe quedar entre 1 y 100 dados y dificultad entre 2 y 10.');
     return;
   }
+  const willpowerInput = marketInput('diceWillpower');
+  const {will,marks} = characterResources(d);
+  const willSlot = willpowerInput.checked
+    ? Array.from({length:will},(_,index)=>index+1).find(slot=>!marks.includes(slot))
+    : null;
+  if (willpowerInput.checked && !willSlot) {
+    alert('No quedan puntos de Voluntad disponibles.');
+    syncDiceWillpower();
+    return;
+  }
   const results = Array.from({length:finalCount},()=>Math.floor(Math.random()*10)+1);
   const hits = results.filter(value=>value>=finalDiff).length;
   const ones = results.filter(value=>value===1).length;
   const pool = manual ? count+' D10' : skill ? attribute+' + '+skill : attribute;
   const record = {date:new Date().toLocaleString('es-CL'),results,diff:finalDiff,bonus,hits,ones,
-    net:Math.max(0,hits+bonus+totals.success),pool,tag:marketInput('diceLabel').value.trim() || pool,modifiers,
+    willpower:willSlot ? 1 : 0, canceledByOnes:true,
+    net:Math.max(0,hits+bonus+totals.success-ones)+(willSlot ? 1 : 0),pool,tag:marketInput('diceLabel').value.trim() || pool,modifiers,
     successAdjustment:totals.success};
   const state = economy();
   const previous = state.rolls;
   state.rolls = [record,...previous].slice(0,50);
+  const previousSheet = d;
+  if (willSlot) d = {...d,willSpent:[...marks,willSlot]};
   try {save()} catch {
     state.rolls = previous;
+    d = previousSheet;
     alert('No se pudo guardar la tirada en este navegador.');
     return;
   }
+  willpowerInput.checked = false;
+  syncDiceWillpower();
+  if (willSlot) document.querySelectorAll('[data-character-resources]').forEach(panel=>{
+    panel.innerHTML = characterResourceControls(d,true);
+  });
   renderDiceHistory();
+}
+
+function syncDiceWillpower() {
+  const input = marketInput('diceWillpower');
+  const {will,marks} = characterResources(d);
+  const remaining = will-marks.length;
+  input.disabled = remaining===0;
+  if (input.disabled) input.checked = false;
+  marketInput('diceWillpowerBalance').textContent = remaining+' de '+will+' puntos de Voluntad disponibles';
 }
 
 function diceResult(roll) {
   return `<div class="market-row"><div><b>${esc(roll.tag)}</b>
     <small>${esc(roll.date)} · ${esc(roll.pool && roll.pool!==roll.tag ? roll.pool+' · ' : '')}${roll.results.length} dados · dificultad ${esc(roll.diff)}</small>
     <div class="dice-results">${roll.results.map(value=>`<span class="pill ${value>=roll.diff?'dice-hit':''}">${esc(value)}</span>`).join('')}</div>
-    <small>${esc(roll.hits)} éxitos por dados + ${esc(roll.bonus)} automáticos${roll.successAdjustment ? ' · ajuste de méritos y defectos: '+esc(roll.successAdjustment) : ''} = <b>${esc(roll.net)} éxitos</b> · unos: ${esc(roll.ones)}</small>
+    <small>${esc(roll.hits)} éxitos por dados + ${esc(roll.bonus)} automáticos${roll.successAdjustment ? ' · ajuste de méritos y defectos: '+esc(roll.successAdjustment) : ''} ${roll.canceledByOnes?'− '+esc(roll.ones)+' por unos':''}${roll.willpower?' · +1 éxito asegurado por Voluntad':''} = <b>${esc(roll.net)} éxitos</b>${roll.canceledByOnes?'':' · unos: '+esc(roll.ones)}</small>
     ${Array.isArray(roll.modifiers) && roll.modifiers.length ? `<small>Rasgos aplicados: ${roll.modifiers.filter(item=>item && Object.hasOwn(traitRollTargets,item.target)).map(item=>esc(item.name)+' ('+(item.value>0?'+':'')+esc(item.value)+' '+traitRollTargets[item.target]+')').join(' · ')}</small>` : ''}
   </div></div>`;
 }
@@ -1144,6 +1179,7 @@ let products=allProducts(),weapons=weaponCatalog;root.innerHTML=`<div class="sec
   for (const [id,value] of inputs) if (value!==undefined) marketInput(id).value = value;
   root.querySelectorAll('[data-market-group]').forEach(group=>{group.open=openGroups.has(group.dataset.marketGroup)});
   syncDicePool();
+  syncDiceWillpower();
   renderDiceHistory();
   filterProducts();
 }
