@@ -29,7 +29,7 @@
 .character-resources h3{margin:12px 0 5px}
 
 .will-permanent{display:flex;gap:.45rem;flex-wrap:wrap;color:#f6d58a}
-</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · V14 · cambios y costos en tiempo real</div></header>
+</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · V15 · cambios y costos en tiempo real</div></header>
 <section class="panel" id="campaignSignIn">
   <h2>Entrar a la campaña</h2><p>Si ya aceptaste tu invitación, tu cuenta está habilitada. Si cerraste sesión o cambiaste de navegador, pide un enlace para volver a entrar.</p>
   <form id="campaignLogin"><label>Correo invitado<input type="email" name="email" required autocomplete="email"></label><button class="primary">Enviar enlace para iniciar sesión</button></form>
@@ -58,6 +58,7 @@
   <strong id="sheetPhase"></strong>
   <p id="sheetPhaseDetail" class="sub"></p>
   <p id="draftStatus" role="status" class="sub"></p>
+  <button id="recoverCampaignDraft" type="button" hidden>Recuperar borrador anterior</button>
 </section>
 <dialog id="importPreview" aria-labelledby="importPreviewTitle">
   <h2 id="importPreviewTitle">Revisar ficha antes de importar</h2>
@@ -130,12 +131,14 @@ Ken:{req:'Kou adquirido',effect:'Distribuye Ten + Ren en una defensa y ataque eq
 Ryu:{req:'Ten 5 y Ren 5',effect:'Redistribuye dinámicamente Ten + Ren entre ataque y defensa (10/90, 20/80, 30/70, 40/60, etc.).',aura:'5 puntos de Nen.'}};
 function nenXp(k){const n=Number(d.nen[k]||0),m=({En:3,Shu:3,Kou:4,Ken:4,Ryu:5}[k]||2);return n===0?'Sin costo definido desde 0 (consultar narrador)':`${n*m} PX Nen (valor actual ${n} × ${m})`}
 function nenTechniqueRows() {
+  const totals = budget();
   const expanded = new Set(Array.from(document.querySelectorAll('details[data-nen-technique][open]'),
     entry => entry.dataset.nenTechnique));
   return nen.map(key => {
     const guide = nenGuide[key];
     const level = Number(d.nen[key] || 0);
     const available = allowed(key);
+    const quote = creationIncrease('nen',key,totals);
     return `<div class="nen-technique">
       <details data-nen-technique="${esc(key)}" ${expanded.has(key) ? 'open' : ''}>
         <summary><strong>${esc(key)}</strong> <small>${available ? 'Disponible' : 'Requisitos pendientes'}</small></summary>
@@ -149,7 +152,7 @@ function nenTechniqueRows() {
       <div class="controls">
         <button aria-label="Bajar nivel de ${esc(key)}" onclick="adjust('nen','${key}',-1)" ${creationIsClosed()?'disabled':''}>−</button>
         <b aria-label="Nivel ${level} de 5">${level}</b>
-        <button aria-label="Subir nivel de ${esc(key)}" onclick="adjust('nen','${key}',1)" ${creationIsClosed()?'disabled':''}>+</button>
+        <button aria-label="Subir nivel de ${esc(key)}" onclick="adjust('nen','${key}',1)" ${purchaseButton(quote)}>+ ${quote.label}</button>
       </div>
     </div>`;
   }).join('') + '<p class="sub">Fuente: manual de la campaña, sección «Atributos Nen» y tabla «Experiencia habilidades Nen». La tabla denomina «RYO» a Ryu.</p>';
@@ -235,28 +238,46 @@ function describeInitialPoints(pending) {
   return pending.map(([name,points])=>name+' '+points).join(' · ');
 }
 
+function creationPurchase(before,after) {
+  const cost = before.free-after.free;
+  const spendsPG = Object.keys(after.spent).some(key=>after.spent[key]>before.spent[key]);
+  const pending = remainingInitialPoints(before);
+  const blocked = spendsPG && (pending.length>0 || after.free<0);
+  return {cost,blocked,pending};
+}
+
+function creationIncrease(kind,key,totals) {
+  const current = integer(key ? d[kind][key] : d[kind]);
+  const increment = kind==='reserveBonus' ? 3 : 1;
+  const value = current+increment;
+  const next = {...d,[kind]:key ? {...d[kind],[key]:value} : value};
+  const {cost,blocked} = creationPurchase(totals,budget(next));
+  const capped = key ? current>=5 || (kind==='nen' && !allowed(key))
+    || (d.usePriorities?.[kind] && categoryCost(kind,categoryOf(kind,key))+
+      (creationRating(current,key,experienceLevels(d),kind==='attrs'?1:0)===4?2:1)>categoryLimit(kind,categoryOf(kind,key)))
+    : kind==='hatsu' ? current>=5 : kind==='willBonus' && willpowerRating(d)>=maxWillpower;
+  const label = cost>0 ? cost+' PG' : '';
+  return {disabled:creationIsClosed() || capped || blocked,label};
+}
+
+function purchaseButton(quote) {
+  return quote.disabled ? 'disabled' : '';
+}
+
 function commitCreation(next) {
   if (creationIsClosed()) {
     alert('La creación está cerrada. Usa Experiencia para mejorar tu personaje.');
     return false;
   }
-  if (!confirmNenDependencyChange(next)) return false;
-  const before = budget();
-  const after = budget(next);
-  const spendsMore = Object.keys(after.spent).some(key=>after.spent[key]>before.spent[key]);
-  if (spendsMore) {
-    const pending = remainingInitialPoints(before);
-    if (pending.length) {
-      alert('Completa el reparto inicial antes de usar PG. Por repartir: '+describeInitialPoints(pending)+'.');
-      render();
-      return false;
-    }
-    if (after.free<0) {
-      alert('No quedan suficientes puntos gratuitos para este cambio.');
-      render();
-      return false;
-    }
+  const {blocked,pending} = creationPurchase(budget(),budget(next));
+  if (blocked) {
+    alert(pending.length
+      ? 'Completa el reparto inicial antes de usar PG. Por repartir: '+describeInitialPoints(pending)+'.'
+      : 'No quedan suficientes puntos gratuitos para este cambio.');
+    render();
+    return false;
   }
+  if (!confirmNenDependencyChange(next)) return false;
   d=next;
   save();
   render();
@@ -281,8 +302,9 @@ function adjustCreationBonus(key,delta) {
   commitCreation({...d,[key]:value});
 }
 
-function creationPointPanel() {
-  const totals = budget();
+function creationPointPanel(totals=budget()) {
+  const willPurchase = creationIncrease('willBonus',null,totals);
+  const reservePurchase = creationIncrease('reserveBonus',null,totals);
   const pending = remainingInitialPoints(totals);
   const closed = creationIsClosed();
   const state = closed ? 'Creación cerrada. Las mejoras se realizan en Experiencia.'
@@ -290,12 +312,12 @@ function creationPointPanel() {
     : 'Reparto inicial completo. Ya puedes gastar PG.';
   const entries = [['Atributos','attrs','5 PG por círculo'],['Habilidades','skills','2 PG por círculo'],['Técnicas Nen','nen','2 PG por círculo'],
     ['Hatsu','hatsu','4 PG por círculo'],['Fuerza de Voluntad','willBonus','1 PG por círculo'],['Reserva Nen','reserveBonus','3 de aura por 1 PG']];
-  return `<div class="panel"><h2>Puntos gratuitos</h2><p class="sub" role="status">${esc(state)}</p><p><strong>${totals.free} de ${freeCreationPoints} PG disponibles</strong></p>
+  return `<div class="panel"><h2>Puntos gratuitos</h2><p class="sub" role="status">${esc(state)}</p><p><strong>${totals.free} de ${freeCreationPoints} PG disponibles</strong> · ${freeCreationPoints-totals.free} PG gastados</p>
     <div class="grid">${entries.map(([name,key,unit])=>`<p>${name} · <b>${totals.spent[key]} PG</b><br><small>${unit}</small></p>`).join('')}</div>
     <div class="trait"><span>Fuerza de Voluntad adicional <small>1 PG por punto</small></span>
-      <span class="controls"><button aria-label="Quitar un punto de Voluntad" onclick="adjustCreationBonus('willBonus',-1)" ${closed?'disabled':''}>−</button><b>${esc(d.willBonus)}</b><button aria-label="Añadir un punto de Voluntad" onclick="adjustCreationBonus('willBonus',1)" ${closed||pending.length||willpowerRating(d)>=maxWillpower?'disabled':''}>+</button></span></div>
+      <span class="controls"><button aria-label="Quitar un punto de Voluntad" onclick="adjustCreationBonus('willBonus',-1)" ${closed?'disabled':''}>−</button><b>${esc(d.willBonus)}</b><button aria-label="Añadir un punto de Voluntad" onclick="adjustCreationBonus('willBonus',1)" ${purchaseButton(willPurchase)}>+ 1 PG</button></span></div>
     <div class="trait"><span>Reserva Nen adicional <small>3 de aura por 1 PG</small></span>
-      <span class="controls"><button aria-label="Quitar tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',-3)" ${closed?'disabled':''}>−</button><b>${esc(d.reserveBonus)}</b><button aria-label="Añadir tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',3)" ${closed||pending.length?'disabled':''}>+</button></span></div>
+      <span class="controls"><button aria-label="Quitar tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',-3)" ${closed?'disabled':''}>−</button><b>${esc(d.reserveBonus)}</b><button aria-label="Añadir tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',3)" ${purchaseButton(reservePurchase)}>+ 1 PG</button></span></div>
   </div>`;
 }
 const CATEGORY_NAMES=['Físicos','Sociales','Mentales'];const PRIORITY_LIMITS={attrs:[6,4,2],skills:[11,8,6]};
@@ -303,8 +325,26 @@ function priorityOrder(kind){const k=kind==='attrs'?'attrPriority':'skillPriorit
 function categoryOf(kind,key){if(kind==='attrs'){let i=attributes.indexOf(key);return i<3?'Físicos':i<6?'Sociales':'Mentales'}return ({'Físicas':'Físicos','Sociales':'Sociales','Mentales':'Mentales'})[Object.entries(skills).find(([cat,items])=>items.includes(key))?.[0]]||'Físicos'}
 function categoryCost(kind,cat){let names=kind==='attrs'?attributes.filter(x=>categoryOf(kind,x)===cat):Object.entries(skills).find(([x])=>x===(cat==='Físicos'?'Físicas':cat))?.[1]||[];const levels=experienceLevels(d),minimum=kind==='attrs'?1:0;return names.reduce((total,key)=>total+ratingCost(creationRating(d[kind][key],key,levels,minimum),minimum),0)}
 function categoryLimit(kind,cat){return PRIORITY_LIMITS[kind][priorityOrder(kind).indexOf(cat)]}
-function changePriority(kind,cat,rank){const k=kind==='attrs'?'attrPriority':'skillPriority';let old=priorityOrder(kind),idx=old.indexOf(cat),next=old.slice();[next[idx],next[rank]]=[next[rank],next[idx]];if(CATEGORY_NAMES.some(c=>categoryCost(kind,c)>PRIORITY_LIMITS[kind][next.indexOf(c)])){alert('La nueva prioridad no admite la distribución actual. Reduce primero los puntos de las categorías afectadas.');render();return}d[k]=next;save();render()}
-function priorityPanel(kind){let order=priorityOrder(kind),labels=['Primaria','Secundaria','Terciaria'];return `<div class="panel"><h2>Prioridades de ${kind==='attrs'?'atributos':'habilidades'}</h2><label><input type="checkbox" style="width:auto" ${d.usePriorities?.[kind]?'checked':''} onchange="set('usePriorities',{...d.usePriorities,${kind}:this.checked})"> Aplicar prioridades por categoría</label><p class="muted">Regla opcional de mesa: selecciona qué categoría recibe cada presupuesto. El manual indica ${kind==='attrs'?'12':'25'} puntos totales, sin fijar aquí una distribución por categorías.</p><div class="grid">${CATEGORY_NAMES.map(cat=>`<label>${cat}<select onchange="changePriority('${kind}','${cat}',Number(this.value))">${labels.map((l,i)=>`<option value="${i}" ${order.indexOf(cat)===i?'selected':''}>${l} · ${PRIORITY_LIMITS[kind][i]} puntos</option>`).join('')}</select><small>${categoryCost(kind,cat)} / ${categoryLimit(kind,cat)} puntos usados</small></label>`).join('')}</div><p class="muted">Para cambiar dos prioridades se intercambian automáticamente. El quinto círculo cuesta 2 puntos. Los incrementos posteriores por experiencia se gestionan por separado.</p></div>`}
+function changePriority(kind,cat,rank){if(creationIsClosed())return;const k=kind==='attrs'?'attrPriority':'skillPriority';let old=priorityOrder(kind),idx=old.indexOf(cat),next=old.slice();[next[idx],next[rank]]=[next[rank],next[idx]];if(CATEGORY_NAMES.some(c=>categoryCost(kind,c)>PRIORITY_LIMITS[kind][next.indexOf(c)])){alert('La nueva prioridad no admite la distribución actual. Reduce primero los puntos de las categorías afectadas.');render();return}d[k]=next;save();render()}
+function priorityIssues(kind) {
+  return CATEGORY_NAMES.flatMap(category=>{
+    const used = categoryCost(kind,category);
+    const limit = categoryLimit(kind,category);
+    return used>limit ? [(kind==='attrs'?'Atributos':'Habilidades')+' '+category+': '+used+' / '+limit] : [];
+  });
+}
+
+function setCreationPriorities(kind,input) {
+  const issues = input.checked ? priorityIssues(kind) : [];
+  if (creationIsClosed() || issues.length) {
+    input.checked = Boolean(d.usePriorities?.[kind]);
+    if (issues.length) alert('Ajusta estas categorías antes de activar prioridades. '+issues.join(' · '));
+    return;
+  }
+  set('usePriorities',{...d.usePriorities,[kind]:input.checked});
+}
+
+function priorityPanel(kind){let order=priorityOrder(kind),labels=['Primaria','Secundaria','Terciaria'];return `<div class="panel"><h2>Prioridades de ${kind==='attrs'?'atributos':'habilidades'}</h2><label><input type="checkbox" style="width:auto" ${d.usePriorities?.[kind]?'checked':''} ${creationIsClosed()?'disabled':''} onchange="setCreationPriorities('${kind}',this)"> Aplicar prioridades por categoría</label><p class="muted">Regla opcional de mesa: selecciona qué categoría recibe cada presupuesto. El manual indica ${kind==='attrs'?'12':'25'} puntos totales, sin fijar aquí una distribución por categorías.</p><div class="grid">${CATEGORY_NAMES.map(cat=>`<label>${cat}<select ${creationIsClosed()?'disabled':''} onchange="changePriority('${kind}','${cat}',Number(this.value))">${labels.map((l,i)=>`<option value="${i}" ${order.indexOf(cat)===i?'selected':''}>${l} · ${PRIORITY_LIMITS[kind][i]} puntos</option>`).join('')}</select><small>${categoryCost(kind,cat)} / ${categoryLimit(kind,cat)} puntos usados</small></label>`).join('')}</div><p class="muted">Para cambiar dos prioridades se intercambian automáticamente. El quinto círculo cuesta 2 puntos. Los incrementos posteriores por experiencia se gestionan por separado.</p></div>`}
 function showDraftStatus(message) {
   document.getElementById('draftStatus').textContent = message;
 }
@@ -381,7 +421,7 @@ function affinityDiagram() {
   </figure>`;
 }
 
-function rows(names,kind){return names.map(k=>{let n=d[kind][k]||0;if(kind==='paths')return `<div class="trait"><span>${esc(k)} <small>${(caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20}% máx.</small></span><b>${esc(n)} / 5</b></div>`;return `<div class="trait"><span>${esc(k)} <small>${esc(kind==='nen' && !allowed(k)?'Requisitos pendientes: '+missingNenRequirements(k).join(' · '):'')}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)" ${creationIsClosed()?'disabled':''}>−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)" ${creationIsClosed()?'disabled':''}>+</button></span></div>`}).join('')}
+function rows(names,kind){const totals=budget();return names.map(k=>{let n=d[kind][k]||0;if(kind==='paths')return `<div class="trait"><span>${esc(k)} <small>${(caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20}% máx.</small></span><b>${esc(n)} / 5</b></div>`;const quote=creationIncrease(kind,k,totals);return `<div class="trait"><span>${esc(k)} <small>${esc(kind==='nen' && !allowed(k)?'Requisitos pendientes: '+missingNenRequirements(k).join(' · '):'')}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)" ${creationIsClosed()?'disabled':''}>−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)" ${purchaseButton(quote)}>+ ${quote.label}</button></span></div>`}).join('')}
 function traitConflict(name){return ({'Corpulento':['Bajo','Niño'],'Bajo':['Corpulento'],'Niño':['Corpulento'],'Elástico':['Cojera'],'Cojera':['Elástico']})[name]||[]}
 const traitLimits = {merits:9,defects:3};
 const baseMeritPoints = 3;
@@ -400,6 +440,10 @@ function meritBudgetSummary(sheet = d) {
 const traitLabels = {merits:'mérito',defects:'defecto'};
 
 function chooseTrait(kind,index,catalogIndex,cost) {
+  if (creationIsClosed()) {
+    alert('La creación está cerrada. Consulta al narrador para ajustar méritos o defectos.');
+    return false;
+  }
   const selected = d[kind];
   const current = selected[index];
   if (catalogIndex === null) {
@@ -607,6 +651,8 @@ function playerSheetSummary(d,editable=false) {
   const speed = (Number(d.attrs.Fuerza) || 1) + (Number(d.attrs.Destreza) || 1) + 5;
   return `<h2>${esc(d.name||'Personaje sin nombre')}</h2><p>${esc(d.type)} · ${esc(d.personality)} · ${esc(d.age)} años</p><p><b>Salud:</b> ${(Number(d.attrs.Resistencia)||1)+(Number(d.height)||5)} · <b>Velocidad:</b> ${speed}</p>${editable ? `<div data-character-resources>${characterResourceControls(d,true)}</div>` : characterResourceControls(d)}<p><b>Afinidad:</b> ${esc(d.affinity)} · <b>Hatsu:</b> ${esc(d.hatsu)}</p><p><b>PG disponibles:</b> <span class="${b.free<0?'bad':'ok'}">${b.free}</span></p><div class="grid"><div><h2>Atributos</h2>${attributes.map(x=>`<p>${x}: ${esc(d.attrs[x])}</p>`).join('')}</div><div><h2>Habilidades</h2>${allSkills.filter(x=>d.skills[x]).map(x=>`<p>${x}: ${esc(d.skills[x])}</p>`).join('')}</div><div><h2>Nen</h2>${nen.filter(x=>d.nen[x]).map(x=>`<p>${x}: ${esc(d.nen[x])}</p>`).join('')}<h2>Méritos y defectos</h2>${meritBudgetSummary(d)}${[...d.merits,...d.defects].map(x=>`<p>${esc(x.name)} (${esc(x.cost)})</p>`).join('')}</div></div>`;}
 function renderSheetPhase(totals) {
+  document.getElementById('recoverCampaignDraft').hidden =
+    !campaignDraftKey || !localStorage.getItem(campaignDraftKey+':previous-draft');
   document.getElementById('sheetPhase').textContent = creationIsClosed() ? 'En campaña' : 'En creación';
   const issues = creationIssues(totals);
   document.getElementById('sheetPhaseDetail').textContent = creationIsClosed()
@@ -617,11 +663,11 @@ function renderSheetPhase(totals) {
 function render(){const b=budget();renderSheetPhase(b);document.getElementById('stats').innerHTML=[['Atributos',creationPoolLabel(b.a,12)],['Habilidades',creationPoolLabel(b.s,25)],['Nen inicial',creationPoolLabel(b.n,b.nb)],['Gratuitos',b.free],['PX general',d.xp],['PX Nen',d.xpNen],['Reserva aura',d.hatsu*10+d.reserveBonus]].map(([k,v])=>`<div class="stat"><small>${k}</small><strong class="${typeof v==='number'&&v<0?'bad':''}">${v}</strong></div>`).join('');let tabs=['Identidad','Atributos','Habilidades','Nen y Hatsu','Méritos y defectos','Técnicas','Experiencia','Ficha','Diario de campaña'];document.getElementById('tabs').innerHTML=tabs.map((x,i)=>i===6?'':`<a class="jump" href="#sec${i}">${x}</a>`).join('');let c='';c+=`<section id="sec0" class="sheet-section"><div class="section-title">01 · Identidad</div>`+`<div class="panel"><h2>Identidad del personaje</h2><div class="identity-layout"><div><div class="grid">${field('name','Nombre')}${field('age','Edad','number')}${field('type','Tipo de cazador / ocupación')}${field('personality','Personalidad')}${field('height','Tamaño (normal 5)','number')}<label>Etapa<select onchange="setNenStage(this.value)" ${creationIsClosed()?'disabled':''}><option ${d.tier==='Novato'?'selected':''}>Novato</option><option ${d.tier==='Controlador'?'selected':''}>Controlador</option></select></label></div><label>Historia<textarea onchange="set('bio',this.value)">${esc(d.bio)}</textarea></label></div><aside class="identity-photo"><img class="portrait" alt="Retrato del personaje" src="${safePortrait(d.portrait)}"><label>Retrato<input type="file" accept="image/*" onchange="uploadPortrait(this)"></label><button onclick="d.portrait='';save();render()">Quitar imagen</button></aside></div></div>`;
 c+=`<section id="sec1" class="sheet-section"><div class="section-title">02 · Atributos</div>`+priorityPanel('attrs')+`<div class="grid">${[['Físicos',attributes.slice(0,3)],['Sociales',attributes.slice(3,6)],['Mentales',attributes.slice(6)]].map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'attrs')}</div>`).join('')}</div><div class="notice">Reparte 12 puntos entre todos los atributos. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 5 PG.</div>`;
 c+=`<section id="sec2" class="sheet-section"><div class="section-title">03 · Habilidades</div>`+priorityPanel('skills')+`<div class="grid">${Object.entries(skills).map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'skills')}</div>`).join('')}</div><div class="notice">Reparte 25 puntos entre todas las habilidades. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 2 PG.</div>`;
-c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Nen y Hatsu</div>`+`<div class="grid"><div class="panel"><h2>Técnicas Nen</h2><p><b>${creationPoolLabel(b.n,b.nb)}</b></p><p class="sub">Reparte los puntos iniciales entre Ten, Ren y Zetsu. Las técnicas avanzadas requieren sus condiciones y cuestan 2 PG por círculo al crear.</p>${nenTechniqueRows()}</div><div class="panel"><h2>Afinidad y caminos</h2><label>Afinidad<select onchange="set('affinity',this.value)">${paths.map(x=>`<option ${d.affinity===x?'selected':''}>${x}</option>`).join('')}</select></label>${rows(paths,'paths')}<div class="trait">Hatsu general <small>${nenStage(d.tier).hatsu} inicial · 4 PG por punto adicional</small> <span class="controls"><button onclick="adjustCreationBonus('hatsu',-1)" ${creationIsClosed()?'disabled':''}>−</button>${d.hatsu}<button onclick="adjustCreationBonus('hatsu',1)" ${creationIsClosed()||remainingInitialPoints(b).length?'disabled':''}>+</button></span></div>${affinityDiagram()}</div></div>${creationPointPanel()}<div class="notice">Requisitos de técnicas avanzadas verificados al aumentar. Los caminos Hatsu se desarrollan con PX generales desde Experiencia.</div>`;
+c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Nen y Hatsu</div>`+`<div class="grid"><div class="panel"><h2>Técnicas Nen</h2><p><b>${creationPoolLabel(b.n,b.nb)}</b></p><p class="sub">Reparte los puntos iniciales entre Ten, Ren y Zetsu. Las técnicas avanzadas requieren sus condiciones y cuestan 2 PG por círculo al crear.</p>${nenTechniqueRows()}</div><div class="panel"><h2>Afinidad y caminos</h2><label>Afinidad<select onchange="set('affinity',this.value)">${paths.map(x=>`<option ${d.affinity===x?'selected':''}>${x}</option>`).join('')}</select></label>${rows(paths,'paths')}<div class="trait">Hatsu general <small>${nenStage(d.tier).hatsu} inicial · 4 PG por punto adicional</small> <span class="controls"><button onclick="adjustCreationBonus('hatsu',-1)" ${creationIsClosed()?'disabled':''}>−</button>${d.hatsu}<button onclick="adjustCreationBonus('hatsu',1)" ${purchaseButton(creationIncrease('hatsu',null,b))}>+ 4 PG</button></span></div>${affinityDiagram()}</div></div>${creationPointPanel(b)}<div class="notice">Requisitos de técnicas avanzadas verificados al aumentar. Los caminos Hatsu se desarrollan con PX generales desde Experiencia.</div>`;
 c+=`<section id="sec4" class="sheet-section"><div class="section-title">05 · Méritos y defectos</div>`+`<div class="grid"><div class="panel"><h2>Méritos</h2>${meritBudgetSummary()}${catalog('merits',merits)}</div><div class="panel"><h2>Defectos</h2>${catalog('defects',defects)}</div></div><div class="notice">Cada punto aportado por un defecto suma un punto al presupuesto de méritos. El narrador debe validar coherencia y restricciones. Los méritos Hatsu requieren Nen, afinidad correspondiente y tienen límite de dos. Los rasgos con coste variable necesitan acuerdo con el narrador.</div>`;
 c+=`<section id="sec5" class="sheet-section"><div class="section-title">06 · Técnicas</div>`+`<div class="panel"><h2>Diseñador de técnicas especiales Nen</h2><div class="grid"><label>Nombre<input id="tn" placeholder="Nombre de técnica"></label><label>Requisitos / caminos<input id="tr" placeholder="Ej. Emisión 3 + Control 3"></label><label>Costo aura acordado<input id="tc" type="number" min="0"></label><label>Condiciones y compromisos<textarea id="td"></textarea></label></div><button class="primary" onclick="addTech()">Añadir técnica</button><div class="notice">El manual deja el costo de aura y la complejidad de cada técnica a criterio del narrador; aquí se registran, no se inventan.</div>${d.techniques.map((x,i)=>`<div class="trait"><span><b>${esc(x.name)}</b><br><small>${esc(x.requirements)} · ${esc(x.cost)} aura · ${esc(x.conditions)}</small></span><button onclick="d.techniques.splice(${i},1);save();render()">Eliminar</button></div>`).join('')}</div>`;
 document.getElementById('experienceContent').innerHTML=`<section id="sec6" class="sheet-section"><div class="section-title">Experiencia</div>`+`<div class="grid"><div class="panel"><h2>Revisiones del narrador</h2><label>Aplicar revisión JSON<input type="file" accept=".json" onchange="applyReview(this)"></label>${reviewHistory(d.narratorReviews || [])}<h2>Asignar experiencia</h2><label>PX general<input type="number" min="0" value="${d.xp}" onchange="set('xp',Math.max(0,+this.value||0))"></label><label>PX Nen<input type="number" min="0" value="${d.xpNen}" onchange="set('xpNen',Math.max(0,+this.value||0))"></label><h2>Atributos</h2>${progression(attributes,'attrs')}<h2>Habilidades</h2>${progression(allSkills,'skills')}<h2>Voluntad</h2>${progression([willHistoryKey],'willBonus')}</div><div class="panel"><h2>Hatsu y caminos</h2>${progression(['Hatsu'],'hatsu')}${progression(paths,'paths')}<h2>Técnicas Nen</h2>${progression(nen,'nen')}<h2>Historial</h2><div id="log">${d.history.slice().reverse().map(x=>`<p>${esc(x)}</p>`).join('')}</div></div></div><div class="notice">PX general: atributo nuevo nivel ×5; habilidad ×2; Hatsu ×4; camino ×3; Voluntad cuesta su nueva puntuación. PX Nen: coste según valor actual y multiplicador del manual. Un nivel 0 de Nen requiere decisión del narrador.</div></section>`;
-c+=`<section id="sec7" class="sheet-section"><div class="section-title">07 · Ficha</div>`+`<div class="panel">${playerSheetSummary(d,true)}<button class="primary" onclick="exportJSON()">Exportar ficha JSON</button> <button onclick="window.print()">Imprimir / guardar PDF</button> <button onclick="document.getElementById('importer').click()">Importar ficha</button><input type="file" id="importer" accept=".json" style="display:none" onchange="importJSON(this)"><button onclick="restoreImportBackup()">Recuperar ficha anterior</button><button onclick="if(confirm('¿Reiniciar personaje?')){d=fresh();resetCampaignSheet();save();render()}">Nueva ficha</button></div></section><section id="sec8" class="sheet-section"><div class="section-title">08 · Diario de campaña</div><div class="grid"><div class="panel notes-area"><h2>Historia y opiniones de la mesa</h2><label>Historia y evolución del personaje<textarea oninput="updateNote('storyNotes',this.value)">${esc(d.storyNotes||'')}</textarea></label><label>Diario de sesiones, acontecimientos y relaciones<textarea oninput="updateNote('sessionNotes',this.value)">${esc(d.sessionNotes||'')}</textarea></label><label>Opiniones del jugador, impresiones y teorías<textarea oninput="updateNote('tableOpinions',this.value)">${esc(d.tableOpinions||'')}</textarea></label><p class="sub">Las notas se guardan automáticamente mientras escribes. Exporta el JSON para conservar una copia y compartirla.</p></div></div></section></section></section></section></section></section></section></section>`;
+c+=`<section id="sec7" class="sheet-section"><div class="section-title">07 · Ficha</div>`+`<div class="panel">${playerSheetSummary(d,true)}<button class="primary" onclick="exportJSON()">Exportar ficha JSON</button> <button onclick="window.print()">Imprimir / guardar PDF</button> <button onclick="document.getElementById('importer').click()">Importar ficha</button><input type="file" id="importer" accept=".json" style="display:none" onchange="importJSON(this)"><button onclick="restoreImportBackup()">Recuperar ficha anterior</button><button onclick="startNewCharacter()">Nueva ficha</button></div></section><section id="sec8" class="sheet-section"><div class="section-title">08 · Diario de campaña</div><div class="grid"><div class="panel notes-area"><h2>Historia y opiniones de la mesa</h2><label>Historia y evolución del personaje<textarea oninput="updateNote('storyNotes',this.value)">${esc(d.storyNotes||'')}</textarea></label><label>Diario de sesiones, acontecimientos y relaciones<textarea oninput="updateNote('sessionNotes',this.value)">${esc(d.sessionNotes||'')}</textarea></label><label>Opiniones del jugador, impresiones y teorías<textarea oninput="updateNote('tableOpinions',this.value)">${esc(d.tableOpinions||'')}</textarea></label><p class="sub">Las notas se guardan automáticamente mientras escribes. Exporta el JSON para conservar una copia y compartirla.</p></div></div></section></section></section></section></section></section></section></section>`;
 if(b.free<0)c=`<div class="notice bad">Presupuesto excedido: ${-b.free} puntos gratuitos. Ajusta tus elecciones.</div>`+c;document.getElementById('content').innerHTML=c}
 const placeholderPortrait='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="300" height="400" fill="#101c2d"/><circle cx="150" cy="145" r="56" fill="#40536c"/><path d="M48 330 Q60 220 150 220 Q240 220 252 330" fill="#40536c"/><text x="150" y="375" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#aab7cb">Sin retrato</text></svg>');
 function updateNote(k,v){d[k]=v;save()}
@@ -678,6 +724,12 @@ function importBackupKey() {
 }
 
 function applyImportedSheet(next) {
+  if (campaignDraftKey) {
+    replaceCampaignDraft(next);
+    resetCampaignSheet();
+    render();
+    return;
+  }
   const previous = d;
   const previousSheet = campaignSheet;
   d = next;
@@ -722,7 +774,7 @@ async function importJSON(input) {
     if (backupKey !== importBackupKey()) return;
     const previous = d;
     if (!await confirmSheetImport(next)) return;
-    if (backupKey !== importBackupKey() || d !== previous) return;
+    if (backupKey !== importBackupKey() || d !== previous || campaignWriteInProgress) return;
     localStorage.setItem(backupKey,JSON.stringify(d));
     applyImportedSheet(next);
   } catch (error) {
@@ -731,6 +783,7 @@ async function importJSON(input) {
 }
 
 function restoreImportBackup() {
+  if (campaignWriteInProgress) return;
   try {
     const raw = localStorage.getItem(importBackupKey());
     if (!raw) return alert('No existe un respaldo de importación en este navegador.');
@@ -765,10 +818,18 @@ function creationIssues(totals=budget()) {
   if (totals.free<0) issues.push('Exceso de '+(-totals.free)+' PG');
   const meritPoints = meritBudget().remaining;
   if (meritPoints<0) issues.push('Exceso de '+(-meritPoints)+' puntos de mérito');
+  for (const kind of ['attrs','skills']) {
+    if (d.usePriorities?.[kind]) issues.push(...priorityIssues(kind));
+  }
   return issues;
 }
 
 function setCampaignPhase(started) {
+  if (!started && creationIsClosed() && !campaignCanNarrate) {
+    alert('El narrador puede reabrir la creación.');
+    renderMarket();
+    return;
+  }
   if (started && !creationIsClosed()) {
     const issues = creationIssues();
     if (issues.length) {
@@ -1172,6 +1233,67 @@ async function applyReview(input) {
   } catch (error) {alert(error.message)}
 }
 let campaignDraftKey = '';
+let campaignWriteInProgress = false;
+
+function campaignDraftSnapshot() {
+  return {
+    sheet:d,
+    saved:campaignSheet,
+    pendingId:localStorage.getItem(campaignDraftKey+':pending-insert')
+  };
+}
+
+function startNewCharacter() {
+  if (campaignWriteInProgress || sheetDeletionInProgress || !confirm('¿Iniciar un personaje nuevo?')) return;
+  try {
+    if (campaignDraftKey) replaceCampaignDraft(fresh());
+    else {d=fresh();save()}
+    resetCampaignSheet();
+    render();
+  } catch (error) {campaignMessage(error.message)}
+}
+
+function preserveCampaignDraft() {
+  if (!campaignDraftKey || !localStorage.getItem(campaignDraftKey)) return;
+  localStorage.setItem(campaignDraftKey+':previous-draft',JSON.stringify(campaignDraftSnapshot()));
+}
+
+function replaceCampaignDraft(sheet,saved=null,pendingId=null) {
+  const previous = campaignDraftSnapshot();
+  preserveCampaignDraft();
+  d = sheet;
+  campaignSheet = saved;
+  const pendingKey = campaignDraftKey+':pending-insert';
+  try {
+    if (pendingId) localStorage.setItem(pendingKey,pendingId);
+    else localStorage.removeItem(pendingKey);
+    save();
+  } catch (error) {
+    d = previous.sheet;
+    campaignSheet = previous.saved;
+    if (previous.pendingId) localStorage.setItem(pendingKey,previous.pendingId);
+    else localStorage.removeItem(pendingKey);
+    throw error;
+  }
+}
+
+function recoverCampaignDraft() {
+  if (!campaignDraftKey || campaignWriteInProgress || sheetDeletionInProgress) return;
+  try {
+    const previous = JSON.parse(localStorage.getItem(campaignDraftKey+':previous-draft'));
+    if (!previous?.sheet || !confirm('¿Recuperar «'+(previous.sheet.name || 'Sin nombre')+
+        '»? El borrador actual quedará disponible como copia anterior.')) return;
+    replaceCampaignDraft({...fresh(),...previous.sheet},previous.saved,previous.pendingId);
+    appElement('campaignAwards').replaceChildren();
+    appElement('campaignAwards').hidden = true;
+    appElement('campaignHistory').replaceChildren();
+    appElement('campaignSheets').value = campaignSheet?.id || '';
+    if (campaignRole==='npc') populateCampaignSelect('campaignNpcLink',campaignPlayerRows,'Sin vínculo',d.npcFor);
+    render();
+    campaignMessage('Borrador anterior recuperado en este navegador.');
+  } catch (error) {campaignMessage(error.message)}
+}
+
 let campaignUser = null;
 let campaignRole = '';
 let campaignNpcRows = [];
@@ -1237,7 +1359,7 @@ async function openCampaign(session) {
 }
 
 async function selectCampaignProfile(role) {
-  if (!campaignUser || (role !== 'player' && !campaignCanNarrate)) return;
+  if (campaignWriteInProgress || !campaignUser || (role !== 'player' && !campaignCanNarrate)) return;
   const wasNpc = campaignRole === 'npc';
   const isNpc = role === 'npc';
   if (wasNpc !== isNpc) {
@@ -1363,18 +1485,46 @@ async function showCampaignAwards() {
 
 async function storeCampaignSheet(sheet) {
   if (!sheet.name?.trim()) throw new Error('Escribe el nombre de tu personaje antes de guardar.');
+  if (campaignWriteInProgress) throw new Error('El guardado anterior todavía está en curso.');
+  campaignWriteInProgress = true;
+  try {
+    await writeCampaignSheet(sheet);
+  } finally {
+    campaignWriteInProgress = false;
+  }
+}
+
+async function writeCampaignSheet(sheet) {
+  const isNpc = campaignRole==='npc';
   const query = campaignClient.from('yorknew_sheets');
+  const pendingKey = campaignDraftKey+':pending-insert';
   if (campaignSheet) {
     const updated = cloudResult(await query.update({sheet}).eq('id',campaignSheet.id)
       .eq('updated_at',campaignSheet.updated_at).eq('is_npc',campaignRole==='npc').select('id,updated_at').maybeSingle());
     if (!updated) throw new Error('La ficha cambió en otra sesión. Exporta tu borrador y vuelve a abrir la ficha guardada.');
     campaignSheet = updated;
   } else {
-    campaignSheet = cloudResult(await query.insert({sheet,is_npc:campaignRole==='npc'}).select('id,updated_at').single());
+    let id = localStorage.getItem(pendingKey);
+    if (id) {
+      const committed = cloudResult(await campaignClient.from('yorknew_sheets').select('id,updated_at')
+        .eq('id',id).eq('owner_id',campaignUser.id).eq('is_npc',isNpc).maybeSingle());
+      if (committed) {
+        campaignSheet = committed;
+        save();
+        localStorage.removeItem(pendingKey);
+        campaignMessage('Se confirmó el guardado anterior. Los cambios posteriores siguen en el borrador.');
+        return;
+      }
+    } else {
+      id = crypto.randomUUID();
+      localStorage.setItem(pendingKey,id);
+    }
+    campaignSheet = cloudResult(await query.insert({id,sheet,is_npc:isNpc}).select('id,updated_at').single());
   }
   const message = campaignRole==='npc'?'NPC guardado en el archivo.':'Ficha guardada en la campaña.';
   try {
     save();
+    localStorage.removeItem(pendingKey);
     campaignMessage(message);
   } catch {
     campaignMessage(message+' No se pudo actualizar la copia local.');
@@ -1403,7 +1553,7 @@ let sheetDeletionInProgress = false;
 const deletionDialog = appElement('campaignDeleteDialog');
 
 appElement('campaignDelete').addEventListener('click',()=>{
-  if (!campaignUser || !['player','npc'].includes(campaignRole)) return;
+  if (campaignWriteInProgress || !campaignUser || !['player','npc'].includes(campaignRole)) return;
   pendingSheetDeletion = {sheet:campaignSheet,key:campaignDraftKey};
   const name = d.name?.trim() || (campaignRole==='npc'?'NPC sin nombre':'Personaje sin nombre');
   appElement('campaignDeleteDescription').textContent = campaignSheet
@@ -1419,7 +1569,7 @@ deletionDialog.addEventListener('close',()=>{pendingSheetDeletion=null});
 appElement('campaignDeleteForm').addEventListener('submit',async event=>{
   event.preventDefault();
   const target = pendingSheetDeletion;
-  if (!target || sheetDeletionInProgress || campaignDraftKey!==target.key || campaignSheet!==target.sheet) return;
+  if (!target || campaignWriteInProgress || sheetDeletionInProgress || campaignDraftKey!==target.key || campaignSheet!==target.sheet) return;
   sheetDeletionInProgress = true;
   const confirmButton = appElement('campaignDeleteConfirm');
   const cancelButton = appElement('campaignDeleteCancel');
@@ -1435,6 +1585,7 @@ appElement('campaignDeleteForm').addEventListener('submit',async event=>{
     try {
       localStorage.removeItem(target.key);
       localStorage.removeItem(target.key+':saved-sheet');
+      localStorage.removeItem(target.key+':pending-insert');
     } catch {draftError = true}
     if (campaignDraftKey===target.key) {
       resetCampaignSheet();
@@ -1461,13 +1612,13 @@ campaignButton('campaignLogout',async () => {
   location.replace(campaignUrl);
 });
 async function openEditableCampaignSheet(id) {
-  if (!id) return;
+  if (!id || campaignWriteInProgress || sheetDeletionInProgress) return;
+  const key = campaignDraftKey;
   const isNpc = campaignRole==='npc';
   const row = cloudResult(await campaignClient.from('yorknew_sheets').select('id,sheet,updated_at')
     .eq('id',id).eq('owner_id',campaignUser.id).eq('is_npc',isNpc).single());
-  campaignSheet = {id:row.id,updated_at:row.updated_at};
-  d = {...fresh(),...row.sheet};
-  save();
+  if (key!==campaignDraftKey || campaignWriteInProgress || sheetDeletionInProgress) return;
+  replaceCampaignDraft({...fresh(),...row.sheet},{id:row.id,updated_at:row.updated_at});
   render();
   appElement('campaignHistory').replaceChildren();
   if (isNpc) populateCampaignSelect('campaignNpcLink',campaignPlayerRows,'Sin vínculo',d.npcFor);
@@ -1475,6 +1626,7 @@ async function openEditableCampaignSheet(id) {
   if (!isNpc) await showCampaignAwards();
 }
 
+appElement('recoverCampaignDraft').addEventListener('click',recoverCampaignDraft);
 campaignButton('campaignOpen',()=>openEditableCampaignSheet(appElement('campaignSheets').value));
 campaignButton('campaignStore',async () => {
   try {
@@ -1496,14 +1648,13 @@ campaignButton('campaignStore',async () => {
   }
 });
 campaignButton('campaignNpcNew',async () => {
-  if (!campaignCanNarrate) return;
+  if (!campaignCanNarrate || campaignWriteInProgress) return;
   if (localStorage.getItem('yorknew_npc:'+campaignUser.id) &&
       !confirm('¿Reemplazar el borrador local de NPC por uno nuevo? Las fichas guardadas quedan en el archivo.')) return;
   await selectCampaignProfile('npc');
+  replaceCampaignDraft(fresh());
   resetCampaignSheet();
-  d = fresh();
   populateCampaignSelect('campaignNpcLink',campaignPlayerRows,'Sin vínculo');
-  save();
   render();
 });
 campaignButton('campaignNpcEdit',async () => {
@@ -1526,14 +1677,11 @@ appElement('campaignNpcLink').addEventListener('change', event => {
   if (campaignRole==='npc') {d.npcFor = event.target.value;save()}
 });
 campaignButton('campaignLegacy',async () => {
+  if (campaignWriteInProgress) return;
   const oldSheet = JSON.parse(localStorage.getItem('yorknew_char'));
   if (!oldSheet || !confirm('¿Cargar como borrador la ficha anterior guardada en este navegador?')) return;
-  campaignSheet = null;
-  appElement('campaignSheets').value = '';
-  appElement('campaignAwards').replaceChildren(); appElement('campaignAwards').hidden = true;
-  appElement('campaignHistory').replaceChildren();
-  d = {...fresh(),...oldSheet};
-  save();
+  replaceCampaignDraft({...fresh(),...oldSheet});
+  resetCampaignSheet();
   render();
   campaignMessage('Ficha recuperada como borrador. Guárdala para compartirla con el narrador.');
 });
@@ -1549,8 +1697,8 @@ campaignButton('campaignVersions',async () => {
     button.textContent = 'Cargar borrador del ' + new Date(version.saved_at).toLocaleString('es-CL');
     button.onclick = () => {
       if (!confirm('¿Cargar esta versión como borrador? Puedes guardar la ficha después de revisarla.')) return;
-      d = {...fresh(),...version.sheet,xp:d.xp,xpNen:d.xpNen,narratorReviews:d.narratorReviews};
-      save();
+      if (campaignWriteInProgress || sheetDeletionInProgress) return;
+      replaceCampaignDraft({...fresh(),...version.sheet,xp:d.xp,xpNen:d.xpNen,narratorReviews:d.narratorReviews},campaignSheet);
       render();
       campaignMessage('Versión cargada como borrador.');
     };
