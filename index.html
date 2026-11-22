@@ -29,7 +29,7 @@
 .character-resources h3{margin:12px 0 5px}
 
 .will-permanent{display:flex;gap:.45rem;flex-wrap:wrap;color:#f6d58a}
-</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · V15 · cambios y costos en tiempo real</div></header>
+</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · V16 · cambios y costos en tiempo real</div></header>
 <section class="panel" id="campaignSignIn">
   <h2>Entrar a la campaña</h2><p>Si ya aceptaste tu invitación, tu cuenta está habilitada. Si cerraste sesión o cambiaste de navegador, pide un enlace para volver a entrar.</p>
   <form id="campaignLogin"><label>Correo invitado<input type="email" name="email" required autocomplete="email"></label><button class="primary">Enviar enlace para iniciar sesión</button></form>
@@ -57,6 +57,7 @@
 <div class="top-switch"><button id="switch-character" class="selected" onclick="switchPage('character')">01 · Creación de personaje</button><button id="switch-market" onclick="switchPage('market')">02 · Juego, dados y mercado</button><button id="switch-experience" onclick="switchPage('experience')">03 · Experiencia</button><button id="switch-narrator" onclick="switchPage('narrator')">Narrador</button></div><main id="characterPage"><section class="panel" aria-label="Estado de la ficha">
   <strong id="sheetPhase"></strong>
   <p id="sheetPhaseDetail" class="sub"></p>
+  <button id="finishCreation" type="button" onclick="setCampaignPhase(true)" hidden>Finalizar creación</button>
   <p id="draftStatus" role="status" class="sub"></p>
   <button id="recoverCampaignDraft" type="button" hidden>Recuperar borrador anterior</button>
 </section>
@@ -264,9 +265,46 @@ function purchaseButton(quote) {
   return quote.disabled ? 'disabled' : '';
 }
 
+function creationPathBudget(sheet=d) {
+  const levels = experienceLevels(sheet);
+  const total = creationRating(sheet.hatsu,'Hatsu',levels);
+  const used = paths.reduce((sum,key)=>sum+creationRating(sheet.paths?.[key],key,levels),0);
+  return {total,used,remaining:total-used};
+}
+
+function pathLimit(sheet,key) {
+  return (caps[sheet.affinity]||caps.Intensificación)[paths.indexOf(key)];
+}
+
+function changeAffinity(select) {
+  const next = {...d,affinity:select.value};
+  const conflicts = paths.filter(key=>integer(d.paths?.[key])>pathLimit(next,key));
+  if (creationIsClosed() || conflicts.length) {
+    select.value = d.affinity;
+    if (conflicts.length) alert('Esta afinidad supera los topes de: '+conflicts.join(', ')+'. Ajusta esos caminos primero.');
+    return;
+  }
+  set('affinity',next.affinity);
+}
+
+function adjustCreationPath(key,delta) {
+  if (!paths.includes(key) || (delta!==1 && delta!==-1) || creationIsClosed()) return;
+  const next = integer(d.paths?.[key])+delta;
+  const learned = experienceLevels(d).get(key)||0;
+  if (next<learned || (delta>0 && (next>pathLimit(d,key) || creationPathBudget().remaining<=0))) return;
+  commitCreation({...d,paths:{...d.paths,[key]:next}});
+}
+
 function commitCreation(next) {
   if (creationIsClosed()) {
     alert('La creación está cerrada. Usa Experiencia para mejorar tu personaje.');
+    return false;
+  }
+  const beforePaths = creationPathBudget();
+  const afterPaths = creationPathBudget(next);
+  if (afterPaths.remaining<Math.min(0,beforePaths.remaining)) {
+    alert('Libera puntos de Camino Hatsu antes de reducir el Hatsu general.');
+    render();
     return false;
   }
   const {blocked,pending} = creationPurchase(budget(),budget(next));
@@ -421,7 +459,24 @@ function affinityDiagram() {
   </figure>`;
 }
 
-function rows(names,kind){const totals=budget();return names.map(k=>{let n=d[kind][k]||0;if(kind==='paths')return `<div class="trait"><span>${esc(k)} <small>${(caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20}% máx.</small></span><b>${esc(n)} / 5</b></div>`;const quote=creationIncrease(kind,k,totals);return `<div class="trait"><span>${esc(k)} <small>${esc(kind==='nen' && !allowed(k)?'Requisitos pendientes: '+missingNenRequirements(k).join(' · '):'')}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)" ${creationIsClosed()?'disabled':''}>−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)" ${purchaseButton(quote)}>+ ${quote.label}</button></span></div>`}).join('')}
+function creationPathsPanel() {
+  const {total,used,remaining} = creationPathBudget();
+  const closed = creationIsClosed();
+  const levels = experienceLevels(d);
+  return `<p class="sub">Hatsu general mide tu dominio del aura. Los caminos indican cuánto has desarrollado cada categoría para cumplir los requisitos de tus habilidades Hatsu.</p>
+    <p class="sub">Durante la creación, cada nivel de Hatsu general otorga 1 punto para repartir entre los caminos. En campaña, los caminos se mejoran con PX.</p>
+    ${closed?'':`<p role="status"><b>${used} / ${total} puntos iniciales asignados</b> · ${remaining<0?`${-remaining} en exceso`:`${remaining} disponibles`}</p>`}
+    ${paths.map(key=>{
+      const value = integer(d.paths?.[key]);
+      const max = pathLimit(d,key);
+      return `<div class="trait"><span>${esc(key)} <small>Tope ${max}/5 · ${max*20}%</small></span>
+        <span class="controls">${closed?'':`<button type="button" aria-label="Quitar punto de ${esc(key)}" onclick="adjustCreationPath('${key}',-1)" ${value<=(levels.get(key)||0)?'disabled':''}>−</button>`}
+        <b>${value}/5</b>
+        ${closed?'':`<button type="button" aria-label="Asignar punto a ${esc(key)}" onclick="adjustCreationPath('${key}',1)" ${remaining<=0||value>=max?'disabled':''}>+</button>`}</span></div>`;
+    }).join('')}`;
+}
+
+function rows(names,kind){const totals=budget();return names.map(k=>{let n=d[kind][k]||0;const quote=creationIncrease(kind,k,totals);return `<div class="trait"><span>${esc(k)} <small>${esc(kind==='nen' && !allowed(k)?'Requisitos pendientes: '+missingNenRequirements(k).join(' · '):'')}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)" ${creationIsClosed()?'disabled':''}>−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)" ${purchaseButton(quote)}>+ ${quote.label}</button></span></div>`}).join('')}
 function traitConflict(name){return ({'Corpulento':['Bajo','Niño'],'Bajo':['Corpulento'],'Niño':['Corpulento'],'Elástico':['Cojera'],'Cojera':['Elástico']})[name]||[]}
 const traitLimits = {merits:9,defects:3};
 const baseMeritPoints = 3;
@@ -536,15 +591,24 @@ function experienceCost(kind,current,key) {
   return (current+1)*({paths:3,attrs:5,skills:2,hatsu:4,willBonus:1})[kind];
 }
 
+function experiencePool(kind) {
+  return ['nen','hatsu','paths'].includes(kind) ? 'xpNen' : 'xp';
+}
+
 function spend(kind,key) {
+  if (!creationIsClosed()) {
+    alert('Finaliza la creación antes de gastar experiencia.');
+    return;
+  }
   const current = experienceRating(kind,key);
   const cost = experienceCost(kind,current,key);
-  const pool = kind==='nen'?'xpNen':'xp';
+  const pool = experiencePool(kind);
   if (kind==='nen' && (!current || !allowed(key))) {
     alert(current ? 'No cumple los requisitos de la técnica.' : 'El manual no define el costo de aprender una técnica desde 0 con PX. Consúltalo con el narrador.');
     return;
   }
-  if ((current>=(kind==='willBonus'?maxWillpower:5)) || Number(d[pool])<cost) {
+  if (current>=(kind==='willBonus'?maxWillpower:5) || !Number.isSafeInteger(Number(d[pool])) ||
+      !Number.isSafeInteger(cost) || cost<=0 || Number(d[pool])<cost) {
     alert('Nivel máximo o experiencia insuficiente.');
     return;
   }
@@ -566,8 +630,13 @@ function progression(names,kind) {
     const level = experienceRating(kind,key);
     const cost = experienceCost(kind,level,key);
     const undefinedCost = kind==='nen' && level===0;
-    const willMax = kind==='willBonus' && level>=maxWillpower;
-    return `<div class="trait"><span>${esc(key)} · ${level}${kind==='willBonus'?'/'+maxWillpower:'/5'} <small>${undefinedCost?'Costo desde 0 pendiente del narrador':willMax?'Máximo alcanzado':'Próximo: '+cost+' PX'}</small>${kind==='nen'&&!allowed(key)?'<small>Requisitos pendientes: '+esc(missingNenRequirements(key).join(' · '))+'</small>':''}</span><button onclick="spend('${kind}','${key}')" ${undefinedCost?'disabled':''}>Mejorar</button></div>`;
+    const max = kind==='paths' ? pathLimit(d,key) : kind==='willBonus' ? maxWillpower : 5;
+    const reachedMax = level>=max;
+    const pool = experiencePool(kind);
+    const unit = pool==='xpNen' ? 'PX Nen' : 'PX general';
+    const disabled = !creationIsClosed() || undefinedCost || reachedMax ||
+      Number(d[pool])<cost || (kind==='nen' && !allowed(key));
+    return `<div class="trait"><span>${esc(key)} · ${level}${kind==='willBonus'?'/'+maxWillpower:'/5'} <small>${undefinedCost?'Costo desde 0 pendiente del narrador':reachedMax?'Máximo alcanzado':'Próximo: '+cost+' '+unit}</small>${kind==='nen'&&!allowed(key)?'<small>Requisitos pendientes: '+esc(missingNenRequirements(key).join(' · '))+'</small>':''}</span><button onclick="spend('${kind}','${key}')" ${disabled?'disabled':''}>Mejorar</button></div>`;
   }).join('');
 }
 function rawWillpower(sheet) {
@@ -654,19 +723,22 @@ function renderSheetPhase(totals) {
   document.getElementById('recoverCampaignDraft').hidden =
     !campaignDraftKey || !localStorage.getItem(campaignDraftKey+':previous-draft');
   document.getElementById('sheetPhase').textContent = creationIsClosed() ? 'En campaña' : 'En creación';
-  const issues = creationIssues(totals);
+  const issues = creationIsClosed() ? [] : creationIssues(totals);
+  const finish = document.getElementById('finishCreation');
+  finish.hidden = creationIsClosed();
+  finish.disabled = issues.length>0;
   document.getElementById('sheetPhaseDetail').textContent = creationIsClosed()
     ? 'La progresión se registra en Experiencia.'
-    : issues.length ? issues.join(' · ') : 'Lista para iniciar campaña desde Mercado.';
+    : issues.length ? issues.join(' · ') : 'Puedes finalizar la creación. Revisa tu afinidad Hatsu antes de confirmar.';
 }
 
 function render(){const b=budget();renderSheetPhase(b);document.getElementById('stats').innerHTML=[['Atributos',creationPoolLabel(b.a,12)],['Habilidades',creationPoolLabel(b.s,25)],['Nen inicial',creationPoolLabel(b.n,b.nb)],['Gratuitos',b.free],['PX general',d.xp],['PX Nen',d.xpNen],['Reserva aura',d.hatsu*10+d.reserveBonus]].map(([k,v])=>`<div class="stat"><small>${k}</small><strong class="${typeof v==='number'&&v<0?'bad':''}">${v}</strong></div>`).join('');let tabs=['Identidad','Atributos','Habilidades','Nen y Hatsu','Méritos y defectos','Técnicas','Experiencia','Ficha','Diario de campaña'];document.getElementById('tabs').innerHTML=tabs.map((x,i)=>i===6?'':`<a class="jump" href="#sec${i}">${x}</a>`).join('');let c='';c+=`<section id="sec0" class="sheet-section"><div class="section-title">01 · Identidad</div>`+`<div class="panel"><h2>Identidad del personaje</h2><div class="identity-layout"><div><div class="grid">${field('name','Nombre')}${field('age','Edad','number')}${field('type','Tipo de cazador / ocupación')}${field('personality','Personalidad')}${field('height','Tamaño (normal 5)','number')}<label>Etapa<select onchange="setNenStage(this.value)" ${creationIsClosed()?'disabled':''}><option ${d.tier==='Novato'?'selected':''}>Novato</option><option ${d.tier==='Controlador'?'selected':''}>Controlador</option></select></label></div><label>Historia<textarea onchange="set('bio',this.value)">${esc(d.bio)}</textarea></label></div><aside class="identity-photo"><img class="portrait" alt="Retrato del personaje" src="${safePortrait(d.portrait)}"><label>Retrato<input type="file" accept="image/*" onchange="uploadPortrait(this)"></label><button onclick="d.portrait='';save();render()">Quitar imagen</button></aside></div></div>`;
 c+=`<section id="sec1" class="sheet-section"><div class="section-title">02 · Atributos</div>`+priorityPanel('attrs')+`<div class="grid">${[['Físicos',attributes.slice(0,3)],['Sociales',attributes.slice(3,6)],['Mentales',attributes.slice(6)]].map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'attrs')}</div>`).join('')}</div><div class="notice">Reparte 12 puntos entre todos los atributos. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 5 PG.</div>`;
 c+=`<section id="sec2" class="sheet-section"><div class="section-title">03 · Habilidades</div>`+priorityPanel('skills')+`<div class="grid">${Object.entries(skills).map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'skills')}</div>`).join('')}</div><div class="notice">Reparte 25 puntos entre todas las habilidades. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 2 PG.</div>`;
-c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Nen y Hatsu</div>`+`<div class="grid"><div class="panel"><h2>Técnicas Nen</h2><p><b>${creationPoolLabel(b.n,b.nb)}</b></p><p class="sub">Reparte los puntos iniciales entre Ten, Ren y Zetsu. Las técnicas avanzadas requieren sus condiciones y cuestan 2 PG por círculo al crear.</p>${nenTechniqueRows()}</div><div class="panel"><h2>Afinidad y caminos</h2><label>Afinidad<select onchange="set('affinity',this.value)">${paths.map(x=>`<option ${d.affinity===x?'selected':''}>${x}</option>`).join('')}</select></label>${rows(paths,'paths')}<div class="trait">Hatsu general <small>${nenStage(d.tier).hatsu} inicial · 4 PG por punto adicional</small> <span class="controls"><button onclick="adjustCreationBonus('hatsu',-1)" ${creationIsClosed()?'disabled':''}>−</button>${d.hatsu}<button onclick="adjustCreationBonus('hatsu',1)" ${purchaseButton(creationIncrease('hatsu',null,b))}>+ 4 PG</button></span></div>${affinityDiagram()}</div></div>${creationPointPanel(b)}<div class="notice">Requisitos de técnicas avanzadas verificados al aumentar. Los caminos Hatsu se desarrollan con PX generales desde Experiencia.</div>`;
+c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Nen y Hatsu</div>`+`<div class="grid"><div class="panel"><h2>Técnicas Nen</h2><p><b>${creationPoolLabel(b.n,b.nb)}</b></p><p class="sub">Reparte los puntos iniciales entre Ten, Ren y Zetsu. Las técnicas avanzadas requieren sus condiciones y cuestan 2 PG por círculo al crear.</p>${nenTechniqueRows()}</div><div class="panel"><h2>Afinidad y caminos</h2><label>Afinidad<select ${creationIsClosed()?'disabled':''} onchange="changeAffinity(this)">${paths.map(x=>`<option ${d.affinity===x?'selected':''}>${x}</option>`).join('')}</select></label>${creationPathsPanel()}<div class="trait">Hatsu general <small>${nenStage(d.tier).hatsu} inicial · 4 PG por punto adicional</small> <span class="controls"><button onclick="adjustCreationBonus('hatsu',-1)" ${creationIsClosed()?'disabled':''}>−</button>${d.hatsu}<button onclick="adjustCreationBonus('hatsu',1)" ${purchaseButton(creationIncrease('hatsu',null,b))}>+ 4 PG</button></span></div>${affinityDiagram()}</div></div>${creationPointPanel(b)}<div class="notice">Requisitos de técnicas avanzadas verificados al aumentar. Los caminos Hatsu se desarrollan con PX generales desde Experiencia.</div>`;
 c+=`<section id="sec4" class="sheet-section"><div class="section-title">05 · Méritos y defectos</div>`+`<div class="grid"><div class="panel"><h2>Méritos</h2>${meritBudgetSummary()}${catalog('merits',merits)}</div><div class="panel"><h2>Defectos</h2>${catalog('defects',defects)}</div></div><div class="notice">Cada punto aportado por un defecto suma un punto al presupuesto de méritos. El narrador debe validar coherencia y restricciones. Los méritos Hatsu requieren Nen, afinidad correspondiente y tienen límite de dos. Los rasgos con coste variable necesitan acuerdo con el narrador.</div>`;
 c+=`<section id="sec5" class="sheet-section"><div class="section-title">06 · Técnicas</div>`+`<div class="panel"><h2>Diseñador de técnicas especiales Nen</h2><div class="grid"><label>Nombre<input id="tn" placeholder="Nombre de técnica"></label><label>Requisitos / caminos<input id="tr" placeholder="Ej. Emisión 3 + Control 3"></label><label>Costo aura acordado<input id="tc" type="number" min="0"></label><label>Condiciones y compromisos<textarea id="td"></textarea></label></div><button class="primary" onclick="addTech()">Añadir técnica</button><div class="notice">El manual deja el costo de aura y la complejidad de cada técnica a criterio del narrador; aquí se registran, no se inventan.</div>${d.techniques.map((x,i)=>`<div class="trait"><span><b>${esc(x.name)}</b><br><small>${esc(x.requirements)} · ${esc(x.cost)} aura · ${esc(x.conditions)}</small></span><button onclick="d.techniques.splice(${i},1);save();render()">Eliminar</button></div>`).join('')}</div>`;
-document.getElementById('experienceContent').innerHTML=`<section id="sec6" class="sheet-section"><div class="section-title">Experiencia</div>`+`<div class="grid"><div class="panel"><h2>Revisiones del narrador</h2><label>Aplicar revisión JSON<input type="file" accept=".json" onchange="applyReview(this)"></label>${reviewHistory(d.narratorReviews || [])}<h2>Asignar experiencia</h2><label>PX general<input type="number" min="0" value="${d.xp}" onchange="set('xp',Math.max(0,+this.value||0))"></label><label>PX Nen<input type="number" min="0" value="${d.xpNen}" onchange="set('xpNen',Math.max(0,+this.value||0))"></label><h2>Atributos</h2>${progression(attributes,'attrs')}<h2>Habilidades</h2>${progression(allSkills,'skills')}<h2>Voluntad</h2>${progression([willHistoryKey],'willBonus')}</div><div class="panel"><h2>Hatsu y caminos</h2>${progression(['Hatsu'],'hatsu')}${progression(paths,'paths')}<h2>Técnicas Nen</h2>${progression(nen,'nen')}<h2>Historial</h2><div id="log">${d.history.slice().reverse().map(x=>`<p>${esc(x)}</p>`).join('')}</div></div></div><div class="notice">PX general: atributo nuevo nivel ×5; habilidad ×2; Hatsu ×4; camino ×3; Voluntad cuesta su nueva puntuación. PX Nen: coste según valor actual y multiplicador del manual. Un nivel 0 de Nen requiere decisión del narrador.</div></section>`;
+document.getElementById('experienceContent').innerHTML=`<section id="sec6" class="sheet-section"><div class="section-title">Experiencia</div>`+`<div class="grid"><div class="panel"><h2>Revisiones del narrador</h2><label>Aplicar revisión JSON<input type="file" accept=".json" onchange="applyReview(this)"></label>${reviewHistory(d.narratorReviews || [])}<h2>Asignar experiencia</h2><label>PX general<input type="number" min="0" value="${d.xp}" onchange="set('xp',Math.max(0,+this.value||0))"></label><label>PX Nen<input type="number" min="0" value="${d.xpNen}" onchange="set('xpNen',Math.max(0,+this.value||0))"></label><h2>Atributos</h2>${progression(attributes,'attrs')}<h2>Habilidades</h2>${progression(allSkills,'skills')}<h2>Voluntad</h2>${progression([willHistoryKey],'willBonus')}</div><div class="panel"><h2>Hatsu y caminos</h2>${progression(['Hatsu'],'hatsu')}${progression(paths,'paths')}<h2>Técnicas Nen</h2>${progression(nen,'nen')}<h2>Historial</h2><div id="log">${d.history.slice().reverse().map(x=>`<p>${esc(x)}</p>`).join('')}</div></div></div><div class="notice">PX general para atributos, habilidades y Voluntad. PX Nen para Hatsu (nuevo nivel ×4), Caminos Hatsu (nuevo nivel ×3) y técnicas Nen (nivel actual × multiplicador). Cada nivel de Hatsu aumenta en 10 la reserva máxima de aura. La compra directa de reserva y el primer nivel de una técnica Nen requieren un costo de campaña definido.</div></section>`;
 c+=`<section id="sec7" class="sheet-section"><div class="section-title">07 · Ficha</div>`+`<div class="panel">${playerSheetSummary(d,true)}<button class="primary" onclick="exportJSON()">Exportar ficha JSON</button> <button onclick="window.print()">Imprimir / guardar PDF</button> <button onclick="document.getElementById('importer').click()">Importar ficha</button><input type="file" id="importer" accept=".json" style="display:none" onchange="importJSON(this)"><button onclick="restoreImportBackup()">Recuperar ficha anterior</button><button onclick="startNewCharacter()">Nueva ficha</button></div></section><section id="sec8" class="sheet-section"><div class="section-title">08 · Diario de campaña</div><div class="grid"><div class="panel notes-area"><h2>Historia y opiniones de la mesa</h2><label>Historia y evolución del personaje<textarea oninput="updateNote('storyNotes',this.value)">${esc(d.storyNotes||'')}</textarea></label><label>Diario de sesiones, acontecimientos y relaciones<textarea oninput="updateNote('sessionNotes',this.value)">${esc(d.sessionNotes||'')}</textarea></label><label>Opiniones del jugador, impresiones y teorías<textarea oninput="updateNote('tableOpinions',this.value)">${esc(d.tableOpinions||'')}</textarea></label><p class="sub">Las notas se guardan automáticamente mientras escribes. Exporta el JSON para conservar una copia y compartirla.</p></div></div></section></section></section></section></section></section></section></section>`;
 if(b.free<0)c=`<div class="notice bad">Presupuesto excedido: ${-b.free} puntos gratuitos. Ajusta tus elecciones.</div>`+c;document.getElementById('content').innerHTML=c}
 const placeholderPortrait='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400"><rect width="300" height="400" fill="#101c2d"/><circle cx="150" cy="145" r="56" fill="#40536c"/><path d="M48 330 Q60 220 150 220 Q240 220 252 330" fill="#40536c"/><text x="150" y="375" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#aab7cb">Sin retrato</text></svg>');
@@ -816,6 +888,13 @@ function creationIssues(totals=budget()) {
   const pending = remainingInitialPoints(totals);
   const issues = pending.length ? ['Por repartir: '+describeInitialPoints(pending)] : [];
   if (totals.free<0) issues.push('Exceso de '+(-totals.free)+' PG');
+  if (totals.free>0) issues.push(totals.free+' PG por gastar');
+  if (!Object.hasOwn(caps,d.affinity) || integer(d.hatsu)<1 || integer(d.hatsu)>5) issues.push('Define la afinidad y el nivel de Hatsu');
+  const overLimit = paths.filter(key=>integer(d.paths?.[key])>pathLimit(d,key));
+  if (overLimit.length) issues.push('Caminos sobre el tope: '+overLimit.join(', '));
+  const {remaining} = creationPathBudget();
+  if (remaining<0) issues.push('Exceso de '+(-remaining)+' puntos de Camino Hatsu');
+  if (remaining>0) issues.push(remaining+' puntos de Camino Hatsu por repartir');
   const meritPoints = meritBudget().remaining;
   if (meritPoints<0) issues.push('Exceso de '+(-meritPoints)+' puntos de mérito');
   for (const kind of ['attrs','skills']) {
@@ -825,8 +904,8 @@ function creationIssues(totals=budget()) {
 }
 
 function setCampaignPhase(started) {
-  if (!started && creationIsClosed() && !campaignCanNarrate) {
-    alert('El narrador puede reabrir la creación.');
+  if (!started && creationIsClosed()) {
+    alert('La creación ya está cerrada. Usa Experiencia para aplicar mejoras.');
     renderMarket();
     return;
   }
@@ -834,6 +913,11 @@ function setCampaignPhase(started) {
     const issues = creationIssues();
     if (issues.length) {
       alert('Antes de iniciar campaña: '+issues.join(' · ')+'.');
+      renderMarket();
+      return;
+    }
+    if (!confirm('¿Finalizar creación con afinidad '+d.affinity+' y Hatsu '+d.hatsu+
+        '? A partir de aquí, las mejoras se pagan con PX general o PX Nen.')) {
       renderMarket();
       return;
     }
@@ -1056,7 +1140,7 @@ function renderMarket(){let e=economy(),root=document.getElementById('marketPage
 const openGroups = new Set([...root.querySelectorAll('[data-market-group][open]')].map(group=>group.dataset.marketGroup));
 const stateIds = ['diceMode','diceCount','diceDiff','diceBonus','diceLabel','diceAttribute','diceSkill','marketSearch'];
 const inputs = new Map(stateIds.map(id=>[id,marketInput(id)?.value]));
-let products=allProducts(),weapons=weaponCatalog;root.innerHTML=`<div class="section-title">Juego, dados y mercado</div><div class="stats"><div class="stat"><small>Saldo actual</small><strong>${e.balance===null?'Sin iniciar':yen(e.balance)}</strong></div><div class="stat"><small>Artículos en inventario</small><strong>${e.inventory.reduce((a,x)=>a+x.qty,0)}</strong></div><div class="stat"><small>Operaciones registradas</small><strong>${e.ledger.length}</strong></div></div><div class="market-note"><b>Regla casera de mejoras:</b> ofensivas ×5 / ×25 / ×125 (+1 a +3 dados de precisión y daño); defensivas ×10 / ×100 / ×1000 (+1 a +3 dados de defensa o absorción cuando aplique). +2 requiere aprobación del narrador; +3 bloqueado durante creación. Las bonificaciones defensivas superpuestas no se acumulan. <label><input type="checkbox" style="width:auto" ${e.campaignStarted?'checked':''} onchange="setCampaignPhase(this.checked)"> Campaña iniciada (cierra el reparto inicial y el uso de PG)</label></div><div class="market-grid" style="margin-top:15px"><div class="market-card"><h2>Dinero y cuenta</h2><p class="muted">El manual establece 1D10 millones de yenes al comenzar. Se usa equivalencia operativa 1 yen del manual = 1 Jenny (J) para compatibilidad de fichas; es una regla de mesa, no una equivalencia canónica.</p><button class="primary" onclick="initialMoney()">Lanzar 1D10 para dinero inicial</button> <button onclick="setBalance()">Fijar saldo</button><div class="grid"><label>Importe (millones de yenes)<input id="moneyAmount" type="number" min="0.0001" step="any" placeholder="Ej. 2.5"></label><label>Concepto<input id="moneyReason" placeholder="Recompensa, misión, alojamiento…"></label></div><div class="wallet-actions"><button onclick="moneyMovement('Ingreso')">+ Registrar ingreso</button><button onclick="moneyMovement('Gasto')">− Registrar gasto</button></div><p class="market-note">El saldo se almacena en <b>millones de unidades</b>: 0,5 = 500.000 J. Los precios del canon, estimaciones y valores del narrador están identificados por su fuente. El saldo puede quedar negativo únicamente con confirmación.</p></div>${dicePanel()}</div><div class="market-card dice-history" data-character-resources>${characterResourceControls(d,true)}</div><section class="market-card dice-history"><h2>Historial de tiradas</h2><button id="clearDiceHistory" type="button" onclick="clearDiceHistory()">Borrar historial</button><div id="diceHistoryList"></div></section><div class="market-grid" style="margin-top:15px"><div class="market-card"><h2>Mercado y compras</h2><p class="muted">Precios en Jenny (J). Los artículos comunes se estiman con referencias de precios japoneses; los valores de armamento son convenciones ficticias para la mesa, no precios reales verificados. La licencia auténtica de cazador no está a la venta.</p><label>Buscar artículo<input id="marketSearch" placeholder="Buscar por nombre o categoría" oninput="filterProducts()"></label><div id="productList">${groupedItems(products,'catalog',x=>`<div class="market-row" data-product="${esc((x.name+' '+x.category).toLowerCase())}"><div><b>${esc(x.name)}</b><small>${esc(x.category)} · ${x.price===null?'Sin precio':(Math.round(x.price*1000000).toLocaleString('es-CL')+' J')}</small><small>${esc(x.description||'')}</small><small>${esc(x.source||'')}</small>${qualitySelect(x.id,productRole(x))}</div><button onclick="buyProduct('${x.id}')" ${x.price===null?'disabled':''}>${x.price===null?'Sin precio':'Comprar'}</button></div>`)}</div></div><div class="market-card"><h2>Inventario del personaje</h2><details class="market-category"><summary>Agregar artículo al mercado</summary><p class="muted">Los precios de canon se distinguen de las estimaciones de mesa y los valores ficticios de armamento. Puedes añadir objetos y valores acordados con el narrador.</p><label>Nombre<input id="newProductName" placeholder="Ej. Botiquín de emergencia"></label><div class="grid"><label>Precio unitario (millones)<input id="newProductPrice" type="number" min="0" step="any" placeholder="Ej. 0.1"></label><label>Categoría<select id="newProductCategory"><option>Equipo</option><option>Consumibles</option><option>Armas</option><option>Defensa</option><option>Servicios</option><option>Objetos especiales</option><option>Otros</option></select></label></div><label>Descripción y efecto<textarea id="newProductDesc" placeholder="Qué hace, limitaciones, aprobación del narrador…"></textarea></label><button onclick="addProduct()">Agregar al mercado</button></details>${e.inventory.length?groupedItems(e.inventory,'inventory',(x,i)=>`<div class="market-row"><div><b>${esc(x.name)}</b><small>${esc(x.category)} · ${yen(x.unitPrice)} / unidad</small><small>${esc(x.description||'')}</small>${x.quality?`<small>Bonificación: +${esc(x.quality)} dados de ${x.role==='defensive'?'defensa/absorción':'precisión y daño'}</small>`:''}</div><div>${['offensive','defensive'].includes(x.role)?`<button onclick="upgradeInventory(${i})">Mejorar</button> `:''}<button onclick="changeInventory(${i},-1)">−</button> <b>${esc(x.qty)}</b> <button onclick="changeInventory(${i},1)">+</button></div></div>`):'<p class="muted">No hay artículos adquiridos todavía.</p>'}<p class="market-note">Los botones +/− del inventario ajustan cantidades físicas; no cobran ni devuelven dinero. Para registrar otra compra utiliza el mercado.</p></div></div><div class="market-grid" style="margin-top:15px"><div class="market-card"><h2>Libro de movimientos</h2>${e.ledger.slice().reverse().slice(0,30).map(x=>`<div class="market-row"><div><b>${esc(x.type)} · ${esc(x.item)}</b><small>${esc(x.date)}</small></div><b class="${x.amount>=0?'ok':'bad'}">${x.amount>=0?'+':''}${yen(x.amount)}</b></div>`).join('')||'<p class="muted">Sin movimientos.</p>'}</div><div class="market-card"><h2>Referencia de armas del manual</h2><p class="muted">La dificultad, daño y demás atributos proceden de la tabla del manual. Los precios son orientativos para la ficción, no cotizaciones comerciales ni canon.</p><div style="overflow:auto"><table style="border-collapse:collapse;width:100%;font-size:12px"><thead><tr>${['Arma','Dif.','Calibre','Alcance','Daño','Carga','Ocultación'].map(x=>`<th style="padding:7px;border-bottom:1px solid #50617a">${x}</th>`).join('')}</tr></thead><tbody>${weapons.map(w=>`<tr>${w.map(x=>`<td style="padding:6px;border-bottom:1px solid #344359">${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div></div><p class="market-note">Todo se almacena junto a la ficha del personaje y se incluye al exportar/importar el archivo JSON. Para conservar los cambios en otros dispositivos, usa «Guardar ficha en la campaña».</p>`;
+let products=allProducts(),weapons=weaponCatalog;root.innerHTML=`<div class="section-title">Juego, dados y mercado</div><div class="stats"><div class="stat"><small>Saldo actual</small><strong>${e.balance===null?'Sin iniciar':yen(e.balance)}</strong></div><div class="stat"><small>Artículos en inventario</small><strong>${e.inventory.reduce((a,x)=>a+x.qty,0)}</strong></div><div class="stat"><small>Operaciones registradas</small><strong>${e.ledger.length}</strong></div></div><div class="market-note"><b>Regla casera de mejoras:</b> ofensivas ×5 / ×25 / ×125 (+1 a +3 dados de precisión y daño); defensivas ×10 / ×100 / ×1000 (+1 a +3 dados de defensa o absorción cuando aplique). +2 requiere aprobación del narrador; +3 bloqueado durante creación. Las bonificaciones defensivas superpuestas no se acumulan. <label><input type="checkbox" style="width:auto" ${e.campaignStarted?'checked disabled':''} onchange="setCampaignPhase(this.checked)"> Campaña iniciada (cierra el reparto inicial y el uso de PG)</label></div><div class="market-grid" style="margin-top:15px"><div class="market-card"><h2>Dinero y cuenta</h2><p class="muted">El manual establece 1D10 millones de yenes al comenzar. Se usa equivalencia operativa 1 yen del manual = 1 Jenny (J) para compatibilidad de fichas; es una regla de mesa, no una equivalencia canónica.</p><button class="primary" onclick="initialMoney()">Lanzar 1D10 para dinero inicial</button> <button onclick="setBalance()">Fijar saldo</button><div class="grid"><label>Importe (millones de yenes)<input id="moneyAmount" type="number" min="0.0001" step="any" placeholder="Ej. 2.5"></label><label>Concepto<input id="moneyReason" placeholder="Recompensa, misión, alojamiento…"></label></div><div class="wallet-actions"><button onclick="moneyMovement('Ingreso')">+ Registrar ingreso</button><button onclick="moneyMovement('Gasto')">− Registrar gasto</button></div><p class="market-note">El saldo se almacena en <b>millones de unidades</b>: 0,5 = 500.000 J. Los precios del canon, estimaciones y valores del narrador están identificados por su fuente. El saldo puede quedar negativo únicamente con confirmación.</p></div>${dicePanel()}</div><div class="market-card dice-history" data-character-resources>${characterResourceControls(d,true)}</div><section class="market-card dice-history"><h2>Historial de tiradas</h2><button id="clearDiceHistory" type="button" onclick="clearDiceHistory()">Borrar historial</button><div id="diceHistoryList"></div></section><div class="market-grid" style="margin-top:15px"><div class="market-card"><h2>Mercado y compras</h2><p class="muted">Precios en Jenny (J). Los artículos comunes se estiman con referencias de precios japoneses; los valores de armamento son convenciones ficticias para la mesa, no precios reales verificados. La licencia auténtica de cazador no está a la venta.</p><label>Buscar artículo<input id="marketSearch" placeholder="Buscar por nombre o categoría" oninput="filterProducts()"></label><div id="productList">${groupedItems(products,'catalog',x=>`<div class="market-row" data-product="${esc((x.name+' '+x.category).toLowerCase())}"><div><b>${esc(x.name)}</b><small>${esc(x.category)} · ${x.price===null?'Sin precio':(Math.round(x.price*1000000).toLocaleString('es-CL')+' J')}</small><small>${esc(x.description||'')}</small><small>${esc(x.source||'')}</small>${qualitySelect(x.id,productRole(x))}</div><button onclick="buyProduct('${x.id}')" ${x.price===null?'disabled':''}>${x.price===null?'Sin precio':'Comprar'}</button></div>`)}</div></div><div class="market-card"><h2>Inventario del personaje</h2><details class="market-category"><summary>Agregar artículo al mercado</summary><p class="muted">Los precios de canon se distinguen de las estimaciones de mesa y los valores ficticios de armamento. Puedes añadir objetos y valores acordados con el narrador.</p><label>Nombre<input id="newProductName" placeholder="Ej. Botiquín de emergencia"></label><div class="grid"><label>Precio unitario (millones)<input id="newProductPrice" type="number" min="0" step="any" placeholder="Ej. 0.1"></label><label>Categoría<select id="newProductCategory"><option>Equipo</option><option>Consumibles</option><option>Armas</option><option>Defensa</option><option>Servicios</option><option>Objetos especiales</option><option>Otros</option></select></label></div><label>Descripción y efecto<textarea id="newProductDesc" placeholder="Qué hace, limitaciones, aprobación del narrador…"></textarea></label><button onclick="addProduct()">Agregar al mercado</button></details>${e.inventory.length?groupedItems(e.inventory,'inventory',(x,i)=>`<div class="market-row"><div><b>${esc(x.name)}</b><small>${esc(x.category)} · ${yen(x.unitPrice)} / unidad</small><small>${esc(x.description||'')}</small>${x.quality?`<small>Bonificación: +${esc(x.quality)} dados de ${x.role==='defensive'?'defensa/absorción':'precisión y daño'}</small>`:''}</div><div>${['offensive','defensive'].includes(x.role)?`<button onclick="upgradeInventory(${i})">Mejorar</button> `:''}<button onclick="changeInventory(${i},-1)">−</button> <b>${esc(x.qty)}</b> <button onclick="changeInventory(${i},1)">+</button></div></div>`):'<p class="muted">No hay artículos adquiridos todavía.</p>'}<p class="market-note">Los botones +/− del inventario ajustan cantidades físicas; no cobran ni devuelven dinero. Para registrar otra compra utiliza el mercado.</p></div></div><div class="market-grid" style="margin-top:15px"><div class="market-card"><h2>Libro de movimientos</h2>${e.ledger.slice().reverse().slice(0,30).map(x=>`<div class="market-row"><div><b>${esc(x.type)} · ${esc(x.item)}</b><small>${esc(x.date)}</small></div><b class="${x.amount>=0?'ok':'bad'}">${x.amount>=0?'+':''}${yen(x.amount)}</b></div>`).join('')||'<p class="muted">Sin movimientos.</p>'}</div><div class="market-card"><h2>Referencia de armas del manual</h2><p class="muted">La dificultad, daño y demás atributos proceden de la tabla del manual. Los precios son orientativos para la ficción, no cotizaciones comerciales ni canon.</p><div style="overflow:auto"><table style="border-collapse:collapse;width:100%;font-size:12px"><thead><tr>${['Arma','Dif.','Calibre','Alcance','Daño','Carga','Ocultación'].map(x=>`<th style="padding:7px;border-bottom:1px solid #50617a">${x}</th>`).join('')}</tr></thead><tbody>${weapons.map(w=>`<tr>${w.map(x=>`<td style="padding:6px;border-bottom:1px solid #344359">${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div></div><p class="market-note">Todo se almacena junto a la ficha del personaje y se incluye al exportar/importar el archivo JSON. Para conservar los cambios en otros dispositivos, usa «Guardar ficha en la campaña».</p>`;
   for (const [id,value] of inputs) if (value!==undefined) marketInput(id).value = value;
   root.querySelectorAll('[data-market-group]').forEach(group=>{group.open=openGroups.has(group.dataset.marketGroup)});
   syncDicePool();
@@ -1698,7 +1782,9 @@ campaignButton('campaignVersions',async () => {
     button.onclick = () => {
       if (!confirm('¿Cargar esta versión como borrador? Puedes guardar la ficha después de revisarla.')) return;
       if (campaignWriteInProgress || sheetDeletionInProgress) return;
-      replaceCampaignDraft({...fresh(),...version.sheet,xp:d.xp,xpNen:d.xpNen,narratorReviews:d.narratorReviews},campaignSheet);
+      const restored = {...fresh(),...version.sheet,xp:d.xp,xpNen:d.xpNen,narratorReviews:d.narratorReviews};
+      if (creationIsClosed()) restored.economy = {...restored.economy,campaignStarted:true};
+      replaceCampaignDraft(restored,campaignSheet);
       render();
       campaignMessage('Versión cargada como borrador.');
     };
