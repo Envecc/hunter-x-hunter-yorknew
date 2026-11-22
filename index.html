@@ -23,7 +23,7 @@
 .market-category{margin:8px 0;border:1px solid #43546b;border-radius:10px;padding:7px 9px}
 .market-category summary{cursor:pointer;padding:5px 0;font-weight:700;color:#f6d599}
 .market-category summary small{color:#b7cadf}
-</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · cambios y costos en tiempo real</div></header>
+.selected-trait-effect,.dice-trait{margin:8px 0;padding:6px 8px;border:1px solid #43546b;border-radius:8px}.selected-trait-effect summary,.dice-trait summary{cursor:pointer}.selected-trait-effect p,.dice-trait p{margin:6px 0;font-size:.9rem}</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · cambios y costos en tiempo real</div></header>
 <section class="panel" id="campaignSignIn">
   <h2>Entrar a la campaña</h2><p>Si ya aceptaste tu invitación, tu cuenta está habilitada. Si cerraste sesión o cambiaste de navegador, pide un enlace para volver a entrar.</p>
   <form id="campaignLogin"><label>Correo invitado<input type="email" name="email" required autocomplete="email"></label><button class="primary">Enviar enlace para iniciar sesión</button></form>
@@ -241,6 +241,7 @@ function traitSlots(kind,items) {
               return `<option value="${value}" ${value===catalogIndex?'selected':''} ${used?'disabled':''}>${esc(entry.name)} (${entry.min===entry.max?entry.min:entry.min+'–'+entry.max} PG)</option>`;
             }).join('')}</optgroup>`).join('')}
           </select></label>
+          ${item ? `<details class="selected-trait-effect" open><summary>Efecto de ${esc(item.name)}</summary><p>${esc(item.description || 'Consulta el efecto con el narrador.')}</p></details>` : ''}
           ${item && item.min!==item.max ? `<label>Valor de ${esc(item.name)}<select onchange="if(!chooseTrait('${kind}',${index},${catalogIndex},Number(this.value)))this.value=${Number(current.cost)}">
             ${Array.from({length:item.max-item.min+1},(_,i)=>`<option value="${i+item.min}" ${current.cost===i+item.min?'selected':''}>${i+item.min} PG</option>`).join('')}
           </select></label>` : ''}</div>`;
@@ -328,6 +329,52 @@ function dicePool(attribute,skill) {
   return rating(d.attrs[attribute])+rating(d.skills[skill]);
 }
 
+const traitRollTargets = {dice:'dados',success:'éxitos',difficulty:'dificultad'};
+
+function diceTraitOptions() {
+  return ['merits','defects'].flatMap(kind => d[kind].map(trait => ({
+    ...trait,kind,description:traitCatalog.find(item => item.kind===kind && item.name===trait.name)?.description
+  })));
+}
+
+function diceTraitPanel() {
+  const traits = diceTraitOptions();
+  if (!traits.length) return '';
+  return `<details class="market-category" id="diceTraitPanel">
+    <summary>Méritos y defectos de la ficha</summary>
+    <p class="sub">Indica el ajuste que corresponda según el efecto. Usa un valor negativo para restar.</p>
+    ${traits.map((trait,index)=>`<details class="dice-trait">
+      <summary>${esc(trait.name)} · ${trait.kind==='merits'?'Mérito':'Defecto'}</summary>
+      <p>${esc(trait.description || 'Consulta el efecto con el narrador.')}</p>
+      <div class="grid">
+        <label>Aplicar ${esc(trait.name)}<select aria-label="Aplicar ${esc(trait.name)}" data-dice-target="${index}" onchange="this.closest('.dice-trait').querySelector('input').disabled=!this.value">
+          <option value="">Sin aplicar</option><option value="dice">Dados</option><option value="success">Éxitos</option><option value="difficulty">Dificultad</option>
+        </select></label>
+        <label>Valor del ajuste<input data-dice-value="${index}" type="number" disabled min="-100" max="100" step="1" value="0"></label>
+      </div>
+    </details>`).join('')}
+  </details>`;
+}
+
+function readDiceTraits() {
+  return diceTraitOptions().flatMap((trait,index)=>{
+    const target = document.querySelector('[data-dice-target="'+index+'"]')?.value;
+    if (!Object.hasOwn(traitRollTargets,target)) return [];
+    const input = document.querySelector('[data-dice-value="'+index+'"]');
+    const value = input?.value.trim() ? Number(input.value) : NaN;
+    return [{name:trait.name,target,value}];
+  });
+}
+
+function rollTraitTotals(modifiers) {
+  const totals = {dice:0,success:0,difficulty:0};
+  for (const {target,value} of modifiers) {
+    if (!Object.hasOwn(totals,target) || !Number.isInteger(value) || Math.abs(value)>100 || value===0) return null;
+    totals[target] += value;
+  }
+  return totals;
+}
+
 function syncDicePool() {
   const manual = marketInput('diceMode').value === 'manual';
   marketInput('diceManual').hidden = !manual;
@@ -357,7 +404,7 @@ function dicePanel() {
         <label>Éxitos automáticos<input id="diceBonus" type="number" min="0" max="100" step="1" value="0" required></label>
       </div>
       <label>Motivo<input id="diceLabel" maxlength="120" placeholder="Ej. Pasar desapercibido"></label>
-      <button class="primary">Lanzar dados</button>
+      ${diceTraitPanel()}<button class="primary">Lanzar dados</button>
       <p class="sub">Cada dado que iguala o supera la dificultad cuenta como éxito. Los unos se registran por separado.</p>
     </form>
     <div id="latestDiceRoll" aria-live="polite"></div>
@@ -377,12 +424,25 @@ function diceRoll(event) {
     alert('Usa de 1 a 100 dados, dificultad de 2 a 10 y de 0 a 100 éxitos automáticos.');
     return;
   }
-  const results = Array.from({length:count},()=>Math.floor(Math.random()*10)+1);
-  const hits = results.filter(value=>value>=diff).length;
+  const modifiers = readDiceTraits();
+  const totals = rollTraitTotals(modifiers);
+  if (!totals) {
+    alert('Indica un ajuste entero distinto de cero para cada rasgo aplicado.');
+    return;
+  }
+  const finalCount = count+totals.dice;
+  const finalDiff = diff+totals.difficulty;
+  if (!inRange(finalCount,1,100) || !inRange(finalDiff,2,10)) {
+    alert('Con los ajustes, la tirada debe quedar entre 1 y 100 dados y dificultad entre 2 y 10.');
+    return;
+  }
+  const results = Array.from({length:finalCount},()=>Math.floor(Math.random()*10)+1);
+  const hits = results.filter(value=>value>=finalDiff).length;
   const ones = results.filter(value=>value===1).length;
   const pool = manual ? count+' D10' : skill ? attribute+' + '+skill : attribute;
-  const record = {date:new Date().toLocaleString('es-CL'),results,diff,bonus,hits,ones,net:hits+bonus,
-    pool,tag:marketInput('diceLabel').value.trim() || pool};
+  const record = {date:new Date().toLocaleString('es-CL'),results,diff:finalDiff,bonus,hits,ones,
+    net:Math.max(0,hits+bonus+totals.success),pool,tag:marketInput('diceLabel').value.trim() || pool,modifiers,
+    successAdjustment:totals.success};
   const state = economy();
   const previous = state.rolls;
   state.rolls = [record,...previous].slice(0,50);
@@ -398,7 +458,8 @@ function diceResult(roll) {
   return `<div class="market-row"><div><b>${esc(roll.tag)}</b>
     <small>${esc(roll.date)} · ${esc(roll.pool && roll.pool!==roll.tag ? roll.pool+' · ' : '')}${roll.results.length} dados · dificultad ${esc(roll.diff)}</small>
     <div class="dice-results">${roll.results.map(value=>`<span class="pill ${value>=roll.diff?'dice-hit':''}">${esc(value)}</span>`).join('')}</div>
-    <small>${esc(roll.hits)} éxitos por dados + ${esc(roll.bonus)} automáticos = <b>${esc(roll.net)} éxitos</b> · unos: ${esc(roll.ones)}</small>
+    <small>${esc(roll.hits)} éxitos por dados + ${esc(roll.bonus)} automáticos${roll.successAdjustment ? ' · ajuste de méritos y defectos: '+esc(roll.successAdjustment) : ''} = <b>${esc(roll.net)} éxitos</b> · unos: ${esc(roll.ones)}</small>
+    ${Array.isArray(roll.modifiers) && roll.modifiers.length ? `<small>Rasgos aplicados: ${roll.modifiers.filter(item=>item && Object.hasOwn(traitRollTargets,item.target)).map(item=>esc(item.name)+' ('+(item.value>0?'+':'')+esc(item.value)+' '+traitRollTargets[item.target]+')').join(' · ')}</small>` : ''}
   </div></div>`;
 }
 
