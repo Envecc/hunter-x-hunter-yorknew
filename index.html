@@ -29,7 +29,7 @@
 .character-resources h3{margin:12px 0 5px}
 
 .will-permanent{display:flex;gap:.45rem;flex-wrap:wrap;color:#f6d58a}
-</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · V13 · cambios y costos en tiempo real</div></header>
+</style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · V14 · cambios y costos en tiempo real</div></header>
 <section class="panel" id="campaignSignIn">
   <h2>Entrar a la campaña</h2><p>Si ya aceptaste tu invitación, tu cuenta está habilitada. Si cerraste sesión o cambiaste de navegador, pide un enlace para volver a entrar.</p>
   <form id="campaignLogin"><label>Correo invitado<input type="email" name="email" required autocomplete="email"></label><button class="primary">Enviar enlace para iniciar sesión</button></form>
@@ -54,7 +54,20 @@
   </div>
   <p id="campaignStatus" role="status"></p>
 </section>
-<div class="top-switch"><button id="switch-character" class="selected" onclick="switchPage('character')">01 · Creación de personaje</button><button id="switch-market" onclick="switchPage('market')">02 · Juego, dados y mercado</button><button id="switch-experience" onclick="switchPage('experience')">03 · Experiencia</button><button id="switch-narrator" onclick="switchPage('narrator')">Narrador</button></div><main id="characterPage"><div class="stats" id="stats"></div><div class="tabs" id="tabs"></div><div id="content"></div>
+<div class="top-switch"><button id="switch-character" class="selected" onclick="switchPage('character')">01 · Creación de personaje</button><button id="switch-market" onclick="switchPage('market')">02 · Juego, dados y mercado</button><button id="switch-experience" onclick="switchPage('experience')">03 · Experiencia</button><button id="switch-narrator" onclick="switchPage('narrator')">Narrador</button></div><main id="characterPage"><section class="panel" aria-label="Estado de la ficha">
+  <strong id="sheetPhase"></strong>
+  <p id="sheetPhaseDetail" class="sub"></p>
+  <p id="draftStatus" role="status" class="sub"></p>
+</section>
+<dialog id="importPreview" aria-labelledby="importPreviewTitle">
+  <h2 id="importPreviewTitle">Revisar ficha antes de importar</h2>
+  <p id="importSummary"></p><p id="importNotice"></p>
+  <form method="dialog">
+    <button value="cancel" autofocus>Cancelar</button>
+    <button value="import">Importar como borrador</button>
+  </form>
+</dialog>
+<div class="stats" id="stats"></div><div class="tabs" id="tabs"></div><div id="content"></div>
 <section class="panel"><button id="campaignDelete" type="button">Eliminar ficha</button></section>
 <dialog id="campaignDeleteDialog" class="panel" aria-labelledby="campaignDeleteTitle">
   <h2 id="campaignDeleteTitle">Confirmar eliminación</h2>
@@ -227,6 +240,7 @@ function commitCreation(next) {
     alert('La creación está cerrada. Usa Experiencia para mejorar tu personaje.');
     return false;
   }
+  if (!confirmNenDependencyChange(next)) return false;
   const before = budget();
   const after = budget(next);
   const spendsMore = Object.keys(after.spent).some(key=>after.spent[key]>before.spent[key]);
@@ -291,10 +305,20 @@ function categoryCost(kind,cat){let names=kind==='attrs'?attributes.filter(x=>ca
 function categoryLimit(kind,cat){return PRIORITY_LIMITS[kind][priorityOrder(kind).indexOf(cat)]}
 function changePriority(kind,cat,rank){const k=kind==='attrs'?'attrPriority':'skillPriority';let old=priorityOrder(kind),idx=old.indexOf(cat),next=old.slice();[next[idx],next[rank]]=[next[rank],next[idx]];if(CATEGORY_NAMES.some(c=>categoryCost(kind,c)>PRIORITY_LIMITS[kind][next.indexOf(c)])){alert('La nueva prioridad no admite la distribución actual. Reduce primero los puntos de las categorías afectadas.');render();return}d[k]=next;save();render()}
 function priorityPanel(kind){let order=priorityOrder(kind),labels=['Primaria','Secundaria','Terciaria'];return `<div class="panel"><h2>Prioridades de ${kind==='attrs'?'atributos':'habilidades'}</h2><label><input type="checkbox" style="width:auto" ${d.usePriorities?.[kind]?'checked':''} onchange="set('usePriorities',{...d.usePriorities,${kind}:this.checked})"> Aplicar prioridades por categoría</label><p class="muted">Regla opcional de mesa: selecciona qué categoría recibe cada presupuesto. El manual indica ${kind==='attrs'?'12':'25'} puntos totales, sin fijar aquí una distribución por categorías.</p><div class="grid">${CATEGORY_NAMES.map(cat=>`<label>${cat}<select onchange="changePriority('${kind}','${cat}',Number(this.value))">${labels.map((l,i)=>`<option value="${i}" ${order.indexOf(cat)===i?'selected':''}>${l} · ${PRIORITY_LIMITS[kind][i]} puntos</option>`).join('')}</select><small>${categoryCost(kind,cat)} / ${categoryLimit(kind,cat)} puntos usados</small></label>`).join('')}</div><p class="muted">Para cambiar dos prioridades se intercambian automáticamente. El quinto círculo cuesta 2 puntos. Los incrementos posteriores por experiencia se gestionan por separado.</p></div>`}
+function showDraftStatus(message) {
+  document.getElementById('draftStatus').textContent = message;
+}
+
 function save() {
   const key = campaignDraftKey || 'yorknew_char';
-  localStorage.setItem(key,JSON.stringify(d));
-  if (campaignDraftKey) localStorage.setItem(key+':saved-sheet',JSON.stringify(campaignSheet));
+  try {
+    localStorage.setItem(key,JSON.stringify(d));
+    if (campaignDraftKey) localStorage.setItem(key+':saved-sheet',JSON.stringify(campaignSheet));
+  } catch (error) {
+    showDraftStatus('No se pudo guardar el borrador en este navegador. Exporta una copia JSON.');
+    throw error;
+  }
+  showDraftStatus('Borrador guardado en este navegador.');
   if (campaignRole === 'npc') appElement('campaignNpcDraft').hidden = false;
 }
 function set(k,v){d[k]=v;save();render()}function adjust(kind,key,delta) {
@@ -317,7 +341,28 @@ function set(k,v){d[k]=v;save();render()}function adjust(kind,key,delta) {
   }
   commitCreation({...d,[kind]:{...d[kind],[key]:next}});
 }
-function allowed(k){return ({En:d.nen.Ten>=2&&d.nen.Ren>=2,Gyo:d.nen.Ren>=2,In:d.nen.Zetsu>=3,Shu:d.nen.Ten>=3,Kou:d.nen.Ten>=3&&d.nen.Ren>=3&&d.nen.Zetsu>=3&&d.nen.Gyo>=3&&d.hatsu>=2,Ken:d.nen.Kou>=1,Ryu:d.nen.Ten>=5&&d.nen.Ren>=5})[k]??true}
+const nenRequirements = {
+  En:{Ten:2,Ren:2}, Gyo:{Ren:2}, In:{Zetsu:3}, Shu:{Ten:3},
+  Kou:{Ten:3,Ren:3,Zetsu:3,Gyo:3,Hatsu:2}, Ken:{Kou:1}, Ryu:{Ten:5,Ren:5}
+};
+
+function missingNenRequirements(key,sheet=d) {
+  return Object.entries(nenRequirements[key] || {}).flatMap(([name,required])=>{
+    const current = integer(name==='Hatsu' ? sheet.hatsu : sheet.nen[name]);
+    return current < required ? [name+' '+current+' / '+required] : [];
+  });
+}
+
+function allowed(key) {
+  return missingNenRequirements(key).length === 0;
+}
+
+function confirmNenDependencyChange(next) {
+  const affected = Object.keys(nenRequirements).filter(key=>
+    integer(next.nen[key])>0 && missingNenRequirements(key,next).length>missingNenRequirements(key).length);
+  return affected.length===0 || confirm('Quedarán requisitos pendientes en '+affected.join(', ')+'. ¿Aplicar el cambio?');
+}
+
 function field(k,label,type='text'){return `<label>${label}<input type="${type}" value="${esc(d[k])}" onchange="set('${k}',this.value)"></label>`}function esc(x){return String(x??'').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;')}
 function affinityDiagram() {
   const affinity = Object.hasOwn(caps,d.affinity) ? d.affinity : 'Intensificación';
@@ -336,7 +381,7 @@ function affinityDiagram() {
   </figure>`;
 }
 
-function rows(names,kind){return names.map(k=>{let n=d[kind][k]||0;if(kind==='paths')return `<div class="trait"><span>${esc(k)} <small>${(caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20}% máx.</small></span><b>${esc(n)} / 5</b></div>`;return `<div class="trait"><span>${esc(k)} <small>${kind==='paths'?((caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20)+'% máx.':''}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)" ${creationIsClosed()?'disabled':''}>−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)" ${creationIsClosed()?'disabled':''}>+</button></span></div>`}).join('')}
+function rows(names,kind){return names.map(k=>{let n=d[kind][k]||0;if(kind==='paths')return `<div class="trait"><span>${esc(k)} <small>${(caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20}% máx.</small></span><b>${esc(n)} / 5</b></div>`;return `<div class="trait"><span>${esc(k)} <small>${esc(kind==='nen' && !allowed(k)?'Requisitos pendientes: '+missingNenRequirements(k).join(' · '):'')}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)" ${creationIsClosed()?'disabled':''}>−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)" ${creationIsClosed()?'disabled':''}>+</button></span></div>`}).join('')}
 function traitConflict(name){return ({'Corpulento':['Bajo','Niño'],'Bajo':['Corpulento'],'Niño':['Corpulento'],'Elástico':['Cojera'],'Cojera':['Elástico']})[name]||[]}
 const traitLimits = {merits:9,defects:3};
 const baseMeritPoints = 3;
@@ -478,7 +523,7 @@ function progression(names,kind) {
     const cost = experienceCost(kind,level,key);
     const undefinedCost = kind==='nen' && level===0;
     const willMax = kind==='willBonus' && level>=maxWillpower;
-    return `<div class="trait"><span>${esc(key)} · ${level}${kind==='willBonus'?'/'+maxWillpower:'/5'} <small>${undefinedCost?'Costo desde 0 pendiente del narrador':willMax?'Máximo alcanzado':'Próximo: '+cost+' PX'}</small></span><button onclick="spend('${kind}','${key}')" ${undefinedCost?'disabled':''}>Mejorar</button></div>`;
+    return `<div class="trait"><span>${esc(key)} · ${level}${kind==='willBonus'?'/'+maxWillpower:'/5'} <small>${undefinedCost?'Costo desde 0 pendiente del narrador':willMax?'Máximo alcanzado':'Próximo: '+cost+' PX'}</small>${kind==='nen'&&!allowed(key)?'<small>Requisitos pendientes: '+esc(missingNenRequirements(key).join(' · '))+'</small>':''}</span><button onclick="spend('${kind}','${key}')" ${undefinedCost?'disabled':''}>Mejorar</button></div>`;
   }).join('');
 }
 function rawWillpower(sheet) {
@@ -561,7 +606,15 @@ function playerSheetSummary(d,editable=false) {
   const b = budget(d);
   const speed = (Number(d.attrs.Fuerza) || 1) + (Number(d.attrs.Destreza) || 1) + 5;
   return `<h2>${esc(d.name||'Personaje sin nombre')}</h2><p>${esc(d.type)} · ${esc(d.personality)} · ${esc(d.age)} años</p><p><b>Salud:</b> ${(Number(d.attrs.Resistencia)||1)+(Number(d.height)||5)} · <b>Velocidad:</b> ${speed}</p>${editable ? `<div data-character-resources>${characterResourceControls(d,true)}</div>` : characterResourceControls(d)}<p><b>Afinidad:</b> ${esc(d.affinity)} · <b>Hatsu:</b> ${esc(d.hatsu)}</p><p><b>PG disponibles:</b> <span class="${b.free<0?'bad':'ok'}">${b.free}</span></p><div class="grid"><div><h2>Atributos</h2>${attributes.map(x=>`<p>${x}: ${esc(d.attrs[x])}</p>`).join('')}</div><div><h2>Habilidades</h2>${allSkills.filter(x=>d.skills[x]).map(x=>`<p>${x}: ${esc(d.skills[x])}</p>`).join('')}</div><div><h2>Nen</h2>${nen.filter(x=>d.nen[x]).map(x=>`<p>${x}: ${esc(d.nen[x])}</p>`).join('')}<h2>Méritos y defectos</h2>${meritBudgetSummary(d)}${[...d.merits,...d.defects].map(x=>`<p>${esc(x.name)} (${esc(x.cost)})</p>`).join('')}</div></div>`;}
-function render(){const b=budget();document.getElementById('stats').innerHTML=[['Atributos',creationPoolLabel(b.a,12)],['Habilidades',creationPoolLabel(b.s,25)],['Nen inicial',creationPoolLabel(b.n,b.nb)],['Gratuitos',b.free],['PX general',d.xp],['PX Nen',d.xpNen],['Reserva aura',d.hatsu*10+d.reserveBonus]].map(([k,v])=>`<div class="stat"><small>${k}</small><strong class="${typeof v==='number'&&v<0?'bad':''}">${v}</strong></div>`).join('');let tabs=['Identidad','Atributos','Habilidades','Nen y Hatsu','Méritos y defectos','Técnicas','Experiencia','Ficha','Diario de campaña'];document.getElementById('tabs').innerHTML=tabs.map((x,i)=>i===6?'':`<a class="jump" href="#sec${i}">${x}</a>`).join('');let c='';c+=`<section id="sec0" class="sheet-section"><div class="section-title">01 · Identidad</div>`+`<div class="panel"><h2>Identidad del personaje</h2><div class="identity-layout"><div><div class="grid">${field('name','Nombre')}${field('age','Edad','number')}${field('type','Tipo de cazador / ocupación')}${field('personality','Personalidad')}${field('height','Tamaño (normal 5)','number')}<label>Etapa<select onchange="setNenStage(this.value)" ${creationIsClosed()?'disabled':''}><option ${d.tier==='Novato'?'selected':''}>Novato</option><option ${d.tier==='Controlador'?'selected':''}>Controlador</option></select></label></div><label>Historia<textarea onchange="set('bio',this.value)">${esc(d.bio)}</textarea></label></div><aside class="identity-photo"><img class="portrait" alt="Retrato del personaje" src="${safePortrait(d.portrait)}"><label>Retrato<input type="file" accept="image/*" onchange="uploadPortrait(this)"></label><button onclick="d.portrait='';save();render()">Quitar imagen</button></aside></div></div>`;
+function renderSheetPhase(totals) {
+  document.getElementById('sheetPhase').textContent = creationIsClosed() ? 'En campaña' : 'En creación';
+  const issues = creationIssues(totals);
+  document.getElementById('sheetPhaseDetail').textContent = creationIsClosed()
+    ? 'La progresión se registra en Experiencia.'
+    : issues.length ? issues.join(' · ') : 'Lista para iniciar campaña desde Mercado.';
+}
+
+function render(){const b=budget();renderSheetPhase(b);document.getElementById('stats').innerHTML=[['Atributos',creationPoolLabel(b.a,12)],['Habilidades',creationPoolLabel(b.s,25)],['Nen inicial',creationPoolLabel(b.n,b.nb)],['Gratuitos',b.free],['PX general',d.xp],['PX Nen',d.xpNen],['Reserva aura',d.hatsu*10+d.reserveBonus]].map(([k,v])=>`<div class="stat"><small>${k}</small><strong class="${typeof v==='number'&&v<0?'bad':''}">${v}</strong></div>`).join('');let tabs=['Identidad','Atributos','Habilidades','Nen y Hatsu','Méritos y defectos','Técnicas','Experiencia','Ficha','Diario de campaña'];document.getElementById('tabs').innerHTML=tabs.map((x,i)=>i===6?'':`<a class="jump" href="#sec${i}">${x}</a>`).join('');let c='';c+=`<section id="sec0" class="sheet-section"><div class="section-title">01 · Identidad</div>`+`<div class="panel"><h2>Identidad del personaje</h2><div class="identity-layout"><div><div class="grid">${field('name','Nombre')}${field('age','Edad','number')}${field('type','Tipo de cazador / ocupación')}${field('personality','Personalidad')}${field('height','Tamaño (normal 5)','number')}<label>Etapa<select onchange="setNenStage(this.value)" ${creationIsClosed()?'disabled':''}><option ${d.tier==='Novato'?'selected':''}>Novato</option><option ${d.tier==='Controlador'?'selected':''}>Controlador</option></select></label></div><label>Historia<textarea onchange="set('bio',this.value)">${esc(d.bio)}</textarea></label></div><aside class="identity-photo"><img class="portrait" alt="Retrato del personaje" src="${safePortrait(d.portrait)}"><label>Retrato<input type="file" accept="image/*" onchange="uploadPortrait(this)"></label><button onclick="d.portrait='';save();render()">Quitar imagen</button></aside></div></div>`;
 c+=`<section id="sec1" class="sheet-section"><div class="section-title">02 · Atributos</div>`+priorityPanel('attrs')+`<div class="grid">${[['Físicos',attributes.slice(0,3)],['Sociales',attributes.slice(3,6)],['Mentales',attributes.slice(6)]].map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'attrs')}</div>`).join('')}</div><div class="notice">Reparte 12 puntos entre todos los atributos. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 5 PG.</div>`;
 c+=`<section id="sec2" class="sheet-section"><div class="section-title">03 · Habilidades</div>`+priorityPanel('skills')+`<div class="grid">${Object.entries(skills).map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'skills')}</div>`).join('')}</div><div class="notice">Reparte 25 puntos entre todas las habilidades. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 2 PG.</div>`;
 c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Nen y Hatsu</div>`+`<div class="grid"><div class="panel"><h2>Técnicas Nen</h2><p><b>${creationPoolLabel(b.n,b.nb)}</b></p><p class="sub">Reparte los puntos iniciales entre Ten, Ren y Zetsu. Las técnicas avanzadas requieren sus condiciones y cuestan 2 PG por círculo al crear.</p>${nenTechniqueRows()}</div><div class="panel"><h2>Afinidad y caminos</h2><label>Afinidad<select onchange="set('affinity',this.value)">${paths.map(x=>`<option ${d.affinity===x?'selected':''}>${x}</option>`).join('')}</select></label>${rows(paths,'paths')}<div class="trait">Hatsu general <small>${nenStage(d.tier).hatsu} inicial · 4 PG por punto adicional</small> <span class="controls"><button onclick="adjustCreationBonus('hatsu',-1)" ${creationIsClosed()?'disabled':''}>−</button>${d.hatsu}<button onclick="adjustCreationBonus('hatsu',1)" ${creationIsClosed()||remainingInitialPoints(b).length?'disabled':''}>+</button></span></div>${affinityDiagram()}</div></div>${creationPointPanel()}<div class="notice">Requisitos de técnicas avanzadas verificados al aumentar. Los caminos Hatsu se desarrollan con PX generales desde Experiencia.</div>`;
@@ -593,6 +646,21 @@ function exportJSON(){if(!d.sheetId && globalThis.crypto?.randomUUID){d.sheetId=
       throw Error('Lista inválida: '+key);
     }
   }
+  for (const key of ['xp','xpNen','hatsu','reserveBonus','willBonus']) {
+    if (sheet[key] === undefined) continue;
+    const value = Number(sheet[key]);
+    const minimum = key==='hatsu' ? 1 : 0;
+    const maximum = key==='hatsu' ? 5 : Number.MAX_SAFE_INTEGER;
+    if (!Number.isSafeInteger(value) || value<minimum || value>maximum) throw Error('Valor inválido: '+key);
+    sheet[key] = value;
+  }
+  for (const key of ['merits','defects']) {
+    if (sheet[key]?.some(item=>!record(item) || typeof item.name!=='string' ||
+        !Number.isFinite(Number(item.cost)) || Number(item.cost)<0)) throw Error('Rasgo inválido en '+key);
+  }
+  if (sheet.techniques?.some(item=>!record(item))) throw Error('Técnica inválida');
+  if (sheet.paths !== undefined && (!record(sheet.paths) || Object.values(sheet.paths).some(value=>
+      !Number.isInteger(Number(value)) || Number(value)<0 || Number(value)>5))) throw Error('Camino Hatsu inválido');
   if (sheet.economy !== undefined && !record(sheet.economy)) throw Error('Economía inválida');
   if (sheet.portrait !== undefined && typeof sheet.portrait !== 'string') throw Error('Retrato inválido');
   const defaults = fresh();
@@ -625,6 +693,24 @@ function applyImportedSheet(next) {
   render();
 }
 
+function confirmSheetImport(sheet) {
+  const dialog = document.getElementById('importPreview');
+  const phase = sheet.economy?.campaignStarted ? 'En campaña' : 'En creación';
+  document.getElementById('importSummary').textContent =
+    (String(sheet.name || '').trim() || 'Personaje sin nombre')+' · '+phase+
+    ' · '+(sheet.xp || 0)+' PX · '+(sheet.xpNen || 0)+' PX Nen';
+  const warnings = Object.keys(nenRequirements).filter(key=>
+    integer(sheet.nen[key])>0 && missingNenRequirements(key,sheet).length);
+  document.getElementById('importNotice').textContent =
+    'Se reemplazará el borrador actual y podrás recuperarlo desde este navegador.'+
+    (warnings.length ? ' Técnicas con requisitos pendientes: '+warnings.join(', ')+'.' : '');
+  dialog.returnValue = 'cancel';
+  return new Promise(resolve=>{
+    dialog.addEventListener('close',()=>resolve(dialog.returnValue==='import'),{once:true});
+    dialog.showModal();
+  });
+}
+
 async function importJSON(input) {
   const file = input.files[0];
   input.value = '';
@@ -634,7 +720,9 @@ async function importJSON(input) {
     if (file.size > 3000000) throw Error('Ficha demasiado grande');
     const next = parseImportedSheet(await file.text());
     if (backupKey !== importBackupKey()) return;
-    if (!confirm('¿Importar la ficha? La ficha anterior quedará guardada en este navegador.')) return;
+    const previous = d;
+    if (!await confirmSheetImport(next)) return;
+    if (backupKey !== importBackupKey() || d !== previous) return;
     localStorage.setItem(backupKey,JSON.stringify(d));
     applyImportedSheet(next);
   } catch (error) {
@@ -671,13 +759,20 @@ function qualityName(p,q){return p.name+(q?' +'+q:'')}
 function qualitySelect(id,role){if(role==='utility')return '';return `<label>Calidad <select id="quality-${id}" onchange="updateQualityPreview('${id}')"><option value="0">Normal ×1</option><option value="1">+1 ×${QUALITY_MULT[role][1]}</option><option value="2">+2 ×${QUALITY_MULT[role][2]} · requiere autorización</option><option value="3">+3 ×${QUALITY_MULT[role][3]} · bloqueado al crear</option></select></label><small id="preview-${id}"></small>`}
 function updateQualityPreview(id){let p=allProducts().find(x=>x.id===id),q=Number(document.getElementById('quality-'+id)?.value||0),el=document.getElementById('preview-'+id);if(p&&el)el.textContent='Precio: '+Math.round(qualityPrice(p,q)*1000000).toLocaleString('es-CL')+' J · +'+q+' dados '+(productRole(p)==='offensive'?'precisión y daño':'defensa/absorción cuando corresponda')}
 function campaignPhase(){return economy().campaignStarted===true}
+function creationIssues(totals=budget()) {
+  const pending = remainingInitialPoints(totals);
+  const issues = pending.length ? ['Por repartir: '+describeInitialPoints(pending)] : [];
+  if (totals.free<0) issues.push('Exceso de '+(-totals.free)+' PG');
+  const meritPoints = meritBudget().remaining;
+  if (meritPoints<0) issues.push('Exceso de '+(-meritPoints)+' puntos de mérito');
+  return issues;
+}
+
 function setCampaignPhase(started) {
   if (started && !creationIsClosed()) {
-    const totals = budget();
-    const pending = remainingInitialPoints(totals);
-    if (pending.length || totals.free<0) {
-      alert(pending.length ? 'Completa el reparto antes de iniciar la campaña: '+describeInitialPoints(pending)+'.'
-        : 'Corrige el exceso de PG antes de iniciar la campaña.');
+    const issues = creationIssues();
+    if (issues.length) {
+      alert('Antes de iniciar campaña: '+issues.join(' · ')+'.');
       renderMarket();
       return;
     }
@@ -1277,8 +1372,13 @@ async function storeCampaignSheet(sheet) {
   } else {
     campaignSheet = cloudResult(await query.insert({sheet,is_npc:campaignRole==='npc'}).select('id,updated_at').single());
   }
-  save();
-  campaignMessage(campaignRole==='npc'?'NPC guardado en el archivo.':'Ficha guardada en la campaña.');
+  const message = campaignRole==='npc'?'NPC guardado en el archivo.':'Ficha guardada en la campaña.';
+  try {
+    save();
+    campaignMessage(message);
+  } catch {
+    campaignMessage(message+' No se pudo actualizar la copia local.');
+  }
 }
 
 async function campaignAction(button, action) {
@@ -1377,10 +1477,23 @@ async function openEditableCampaignSheet(id) {
 
 campaignButton('campaignOpen',()=>openEditableCampaignSheet(appElement('campaignSheets').value));
 campaignButton('campaignStore',async () => {
-  await storeCampaignSheet(d);
-  await refreshCampaign();
-  appElement('campaignSheets').value = campaignSheet.id;
-  if (campaignRole==='player') await showCampaignAwards();
+  try {
+    await storeCampaignSheet(d);
+  } catch (error) {
+    let backupStatus = 'El borrador sigue abierto. Exporta una copia JSON antes de cerrar.';
+    try {
+      save();
+      backupStatus = 'El borrador se conservó en este navegador.';
+    } catch {}
+    throw new Error(error.message+' '+backupStatus);
+  }
+  try {
+    await refreshCampaign();
+    appElement('campaignSheets').value = campaignSheet.id;
+    if (campaignRole==='player') await showCampaignAwards();
+  } catch {
+    campaignMessage('La ficha se guardó en la campaña. La lista se podrá actualizar al volver a conectar.');
+  }
 });
 campaignButton('campaignNpcNew',async () => {
   if (!campaignCanNarrate) return;
