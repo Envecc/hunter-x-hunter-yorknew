@@ -734,6 +734,10 @@ function updateCharacterResources(changes,input) {
   document.querySelectorAll('[data-character-resources]').forEach(panel=>{
     panel.innerHTML = characterResourceControls(d,true);
   });
+  if (marketInput('diceCombat')) {
+    syncDicePool();
+    syncDiceWillpower();
+  }
   if (focus && current) current.querySelector('[data-resource-focus="'+focus+'"]')?.focus();
 }
 
@@ -1027,10 +1031,10 @@ function diceTraitPanel() {
       <summary>${esc(trait.name)} · ${trait.kind==='merits'?'Mérito':'Defecto'}</summary>
       <p>${esc(trait.description || 'Consulta el efecto con el narrador.')}</p>
       <div class="grid">
-        <label>Aplicar ${esc(trait.name)}<select aria-label="Aplicar ${esc(trait.name)}" data-dice-target="${index}" onchange="this.closest('.dice-trait').querySelector('input').disabled=!this.value">
+        <label>Aplicar ${esc(trait.name)}<select aria-label="Aplicar ${esc(trait.name)}" data-dice-target="${index}" onchange="this.closest('.dice-trait').querySelector('input').disabled=!this.value;syncDicePool()">
           <option value="">Sin aplicar</option><option value="dice">Dados</option><option value="success">Éxitos</option><option value="difficulty">Dificultad</option>
         </select></label>
-        <label>Valor del ajuste<input data-dice-value="${index}" type="number" disabled min="-100" max="100" step="1" value="0"></label>
+        <label>Valor del ajuste<input data-dice-value="${index}" oninput="syncDicePool()" type="number" disabled min="-100" max="100" step="1" value="0"></label>
       </div>
     </details>`).join('')}
   </details>`;
@@ -1070,7 +1074,7 @@ function combatEquipmentDice(item) {
   const role = productRole(item);
   const action = marketInput('combatAction').value;
   const quality = Number(item.quality);
-  return role===action && Number.isInteger(quality) && quality>=1 && quality<=3 ? quality : 0;
+  return role===(action==='damage'?'offensive':action) && Number.isInteger(quality) && quality>=1 && quality<=3 ? quality : 0;
 }
 
 function syncCombatEquipment() {
@@ -1078,16 +1082,57 @@ function syncCombatEquipment() {
   const bonus = combatEquipmentDice(item);
   marketInput('combatEquipmentInfo').textContent = item
     ? [item.description, bonus ? '+'+bonus+' dados de equipo' : 'Sin dados adicionales de equipo'].filter(Boolean).join(' · ')
-    : 'Selecciona un artículo comprado en el mercado y presente en tu inventario.';
+    : 'Puedes tirar sin objeto o usar uno disponible en tu inventario.';
 }
 
 function useCombatDifficulty() {
   const item = selectedCombatEquipment();
-  if (!item || marketInput('combatAction').value!=='offensive') return;
+  if (!combatActive() || !item || marketInput('combatAction').value!=='offensive') return;
   const match = /^weapon-(\d+)$/.exec(item.productId);
   if (!match) return;
   const difficulty = Number(weaponCatalog[Number(match[1])]?.[1]);
   if (Number.isInteger(difficulty) && difficulty>=2 && difficulty<=10) marketInput('diceDiff').value = difficulty;
+}
+
+const combatNenCosts = {Ten:1,Ren:3,Zetsu:0,En:3,Gyo:1,In:1,Shu:3,Kou:4,Ken:4,Ryu:5};
+
+function combatNenOptions() {
+  return [
+    ...nen.filter(key=>integer(d.nen[key])>0 && allowed(key)),
+    ...d.techniques.map((_,index)=>'custom:'+index)
+  ];
+}
+
+function combatNenEffect(equipment) {
+  const key = marketInput('combatNen').value;
+  if (!key) return {cost:0,dice:0,success:0,damage:0};
+  if (!combatNenOptions().includes(key)) return null;
+  const action = marketInput('combatAction').value;
+  const absorption = action==='defensive' && marketInput('diceAttribute').value==='Resistencia';
+  const damageRoll = action==='damage';
+  const custom = key.startsWith('custom:') ? d.techniques[Number(key.slice(7))] : null;
+  const rank = integer(d.nen[key]);
+  const combined = integer(d.nen.Ten)+integer(d.nen.Ren);
+  const properties = Number(marketInput('combatShu').value);
+  const share = Number(marketInput('combatRyu').value);
+  const extra = Number(marketInput('combatNenDice').value);
+  const cost = custom ? Number(custom.cost) : key==='Shu' ? 3*properties : combatNenCosts[key];
+  if (!Number.isSafeInteger(cost) || cost<0 ||
+      (key==='Shu' && (!equipment || !Number.isInteger(properties) || properties<1 || properties>10)) ||
+      (key==='Ryu' && ![10,20,30,40,50,60,70,80,90].includes(share)) ||
+      ((custom || key==='Gyo') && (!Number.isInteger(extra) || Math.abs(extra)>100))) return null;
+  const focus = {Kou:combined,Ken:Math.ceil(combined/2),Ryu:Math.ceil(combined*share/100)};
+  const success = (absorption || damageRoll) ? focus[key] ?? (absorption && key==='Ten' ? rank : 0) : 0;
+  return {
+    name:custom?.name || key, cost, success,
+    dice:custom || key==='Gyo' ? extra : key==='Zetsu' && marketInput('diceSkill').value==='Sigilo' ? rank : 0,
+    damage:(action==='offensive' || damageRoll) && key==='Shu' ? rank :
+      (action==='offensive' || damageRoll) && key==='Ren' && marketInput('diceSkill').value==='Combate C.C.' ? rank : 0
+  };
+}
+
+function combatActive() {
+  return marketInput('diceMode').value!=='manual' && marketInput('diceCombat').checked;
 }
 
 function syncDicePool() {
@@ -1095,13 +1140,35 @@ function syncDicePool() {
   marketInput('diceManual').hidden = !manual;
   marketInput('diceCount').disabled = !manual;
   marketInput('diceTraits').hidden = manual;
-  const combat = marketInput('diceMode').value === 'combat';
+  marketInput('diceCombatOption').hidden = manual;
+  marketInput('diceCombat').disabled = manual;
+  const combat = combatActive();
   marketInput('combatControls').hidden = !combat;
-  marketInput('combatEquipment').required = combat;
+  const key = marketInput('combatNen').value;
+  marketInput('combatShuOptions').hidden = key!=='Shu';
+  marketInput('combatRyuOptions').hidden = key!=='Ryu';
+  marketInput('combatNenDiceOptions').hidden = key!=='Gyo' && !key.startsWith('custom:');
+  const effect = combat ? combatNenEffect(selectedCombatEquipment()) : null;
+  const {aura,auraSpent} = characterResources(d);
+  const custom = key.startsWith('custom:') ? d.techniques[Number(key.slice(7))] : null;
+  marketInput('combatNenInfo').textContent = [
+    key ? (custom ? [custom.requirements,custom.conditions].filter(Boolean).join(' · ') : nenGuide[key]?.effect) : '',
+    effect && key ? 'Coste de este uso: '+effect.cost+' Nen' : '',
+    effect?.success ? '+'+effect.success+' éxitos automáticos Nen' : '',
+    effect?.damage ? '+'+effect.damage+' al daño (se registra por separado)' : '',
+    effect && effect.cost>aura-auraSpent ? 'Nen insuficiente' : 'Nen disponible: '+(aura-auraSpent)+' / '+aura
+  ].filter(Boolean).join(' · ');
   const base = dicePool(marketInput('diceAttribute').value,marketInput('diceSkill').value);
   const equipmentDice = combat ? combatEquipmentDice(selectedCombatEquipment()) : 0;
-  marketInput('dicePoolTotal').textContent = (base+equipmentDice)+' dados'+
-    (equipmentDice ? ' ('+base+' de ficha + '+equipmentDice+' de equipo)' : '');
+  const traitDice = combat ? rollTraitTotals(readDiceTraits())?.dice || 0 : 0;
+  marketInput('dicePoolTotal').textContent = (base+equipmentDice+(effect?.dice || 0)+traitDice)+' dados';
+  const panel = marketInput('diceTraitPanel');
+  const slot = marketInput(combat?'combatTraitSlot':'regularTraitSlot');
+  if (panel && panel.parentElement!==slot) {
+    slot.append(panel);
+    panel.querySelector('summary').textContent = combat
+      ? '¿Aplicar méritos o defectos al combate?' : 'Méritos y defectos de la ficha';
+  }
   if (combat) syncCombatEquipment();
 }
 
@@ -1110,7 +1177,7 @@ function dicePanel() {
     `<option value="${esc(name)}">${esc(name)} (${esc(values[name]??0)})</option>`).join('');
   return `<div class="market-card"><h2>Tirador de dados D10</h2>
     <form id="diceForm" onsubmit="diceRoll(event)">
-      <label>Reserva<select id="diceMode" onchange="syncDicePool()"><option value="traits">Atributo + habilidad</option><option value="manual">Número manual</option><option value="combat">Combate</option></select></label>
+      <label>Reserva<select id="diceMode" onchange="syncDicePool()"><option value="traits">Atributo + habilidad</option><option value="manual">Número manual</option></select></label>
       <div id="diceTraits">
         <div class="grid">
           <label>Atributo<select id="diceAttribute" onchange="syncDicePool()">${options(attributes,d.attrs)}</select></label>
@@ -1120,18 +1187,28 @@ function dicePanel() {
         </div>
         <p>Reserva de la ficha: <output id="dicePoolTotal" for="diceAttribute diceSkill"></output></p>
       </div>
+      <label id="diceCombatOption"><input id="diceCombat" type="checkbox" style="width:auto" onchange="useCombatDifficulty();syncDicePool()"> Combate</label>
       <fieldset id="combatControls" hidden>
         <legend>Combate</legend>
         <div class="grid">
           <label>Acción<select id="combatAction" onchange="useCombatDifficulty();syncDicePool()">
-            <option value="offensive">Ataque</option><option value="defensive">Defensa o absorción</option>
+            <option value="offensive">Ataque</option><option value="defensive">Defensa o absorción</option><option value="damage">Daño</option>
           </select></label>
           <label>Equipo del inventario<select id="combatEquipment" onchange="useCombatDifficulty();syncDicePool()">
-            <option value="">Elige un artículo comprado</option>
+            <option value="">Sin objeto</option>
             ${combatEquipment().map(({item,index})=>`<option value="${index}" data-item-key="${esc(item.productId+':'+(item.quality||0))}">${esc(item.name)}</option>`).join('')}
           </select></label>
         </div>
         <p id="combatEquipmentInfo" class="sub" aria-live="polite"></p>
+        <label>¿Aplicar una técnica Nen?<select id="combatNen" onchange="syncDicePool()">
+          <option value="">Sin técnica Nen</option>
+          ${combatNenOptions().map(key=>`<option value="${esc(key)}">${esc(key.startsWith('custom:') ? d.techniques[Number(key.slice(7))].name : key)}</option>`).join('')}
+        </select></label>
+        <label id="combatShuOptions" hidden>Propiedades que otorgas con Shu<input id="combatShu" type="number" step="any" value="1" oninput="syncDicePool()"></label>
+        <label id="combatRyuOptions" hidden>Porcentaje de aura asignado a esta acción<select id="combatRyu" onchange="syncDicePool()">${[10,20,30,40,50,60,70,80,90].map(value=>`<option>${value}</option>`).join('')}</select></label>
+        <label id="combatNenDiceOptions" hidden>Ajuste de dados Nen acordado con el narrador<input id="combatNenDice" type="number" step="any" value="0" oninput="syncDicePool()"></label>
+        <p id="combatNenInfo" class="sub" aria-live="polite"></p>
+        <div id="combatTraitSlot"></div>
       </fieldset>
       <label id="diceManual" hidden>Número de dados<input id="diceCount" type="number" min="1" max="100" step="1" value="5"></label>
       <div class="grid">
@@ -1141,7 +1218,7 @@ function dicePanel() {
     <p id="diceWillpowerBalance" class="sub" aria-live="polite"></p>
       </div>
       <label>Motivo<input id="diceLabel" maxlength="120" placeholder="Ej. Pasar desapercibido"></label>
-      ${diceTraitPanel()}<button class="primary">Lanzar dados</button>
+      <div id="regularTraitSlot">${diceTraitPanel()}</div><button class="primary">Lanzar dados</button>
       <p class="sub">Cada dado que iguala o supera la dificultad cuenta como éxito. Los unos se registran por separado.</p>
     </form>
     <div id="latestDiceRoll" aria-live="polite"></div>
@@ -1153,10 +1230,16 @@ function diceRoll(event) {
   const manual = marketInput('diceMode').value === 'manual';
   const attribute = marketInput('diceAttribute').value;
   const skill = marketInput('diceSkill').value;
-  const combat = marketInput('diceMode').value === 'combat';
+  const combat = combatActive();
   const equipment = combat ? selectedCombatEquipment() : null;
-  if (combat && (!equipment || !skill)) {
-    alert('Para combate, selecciona una habilidad y un artículo comprado que esté en tu inventario.');
+  if (combat && (!skill || (marketInput('combatEquipment').value && !equipment))) {
+    alert('Selecciona una habilidad y verifica que el objeto siga en tu inventario.');
+    return;
+  }
+  const effect = combat ? combatNenEffect(equipment) : {cost:0,dice:0,success:0,damage:0};
+  const {will,marks,aura,auraSpent} = characterResources(d);
+  if (!effect || effect.cost>aura-auraSpent) {
+    alert(effect ? 'No tienes suficientes puntos de Nen.' : 'Revisa la técnica Nen y sus opciones.');
     return;
   }
   const equipmentDice = combatEquipmentDice(equipment);
@@ -1174,14 +1257,13 @@ function diceRoll(event) {
     alert('Indica un ajuste entero distinto de cero para cada rasgo aplicado.');
     return;
   }
-  const finalCount = count+totals.dice;
+  const finalCount = count+totals.dice+effect.dice;
   const finalDiff = diff+totals.difficulty;
   if (!inRange(finalCount,1,100) || !inRange(finalDiff,2,10)) {
     alert('Con los ajustes, la tirada debe quedar entre 1 y 100 dados y dificultad entre 2 y 10.');
     return;
   }
   const willpowerInput = marketInput('diceWillpower');
-  const {will,marks} = characterResources(d);
   const willSlot = willpowerInput.checked
     ? Array.from({length:will},(_,index)=>index+1).find(slot=>!marks.includes(slot))
     : null;
@@ -1196,14 +1278,20 @@ function diceRoll(event) {
   const pool = manual ? count+' D10' : skill ? attribute+' + '+skill : attribute;
   const record = {date:new Date().toLocaleString('es-CL'),results,diff:finalDiff,bonus,hits,ones,
     willpower:willSlot ? 1 : 0, canceledByOnes:true,
-    net:Math.max(0,hits+bonus+totals.success-ones)+(willSlot ? 1 : 0),pool,tag:marketInput('diceLabel').value.trim() || pool,modifiers,
+    net:Math.max(0,hits+bonus+totals.success-ones)+effect.success+(willSlot ? 1 : 0),pool,tag:marketInput('diceLabel').value.trim() || pool,modifiers,
     successAdjustment:totals.success};
-  if (combat) record.combat = {item:equipment.name, equipmentDice, action:marketInput('combatAction').value};
+  if (combat) record.combat = {
+    item:equipment?.name || 'Sin objeto', equipmentDice, action:marketInput('combatAction').value,
+    nen:effect.name ? effect : null,
+    damage:marketInput('combatAction').value==='damage' ? record.net+effect.damage : null
+  };
   const state = economy();
   const previous = state.rolls;
   state.rolls = [record,...previous].slice(0,50);
   const previousSheet = d;
-  if (willSlot) d = {...d,willSpent:[...marks,willSlot]};
+  if (willSlot || effect.cost) d = {
+    ...d, willSpent:willSlot ? [...marks,willSlot] : d.willSpent, auraSpent:auraSpent+effect.cost
+  };
   try {save()} catch {
     state.rolls = previous;
     d = previousSheet;
@@ -1211,8 +1299,10 @@ function diceRoll(event) {
     return;
   }
   willpowerInput.checked = false;
+  if (combat) marketInput('combatNen').value = '';
   syncDiceWillpower();
-  if (willSlot) document.querySelectorAll('[data-character-resources]').forEach(panel=>{
+  syncDicePool();
+  if (willSlot || effect.cost) document.querySelectorAll('[data-character-resources]').forEach(panel=>{
     panel.innerHTML = characterResourceControls(d,true);
   });
   renderDiceHistory();
@@ -1230,9 +1320,11 @@ function syncDiceWillpower() {
 function diceResult(roll) {
   return `<div class="market-row"><div><b>${esc(roll.tag)}</b>
     <small>${esc(roll.date)} · ${esc(roll.pool && roll.pool!==roll.tag ? roll.pool+' · ' : '')}${roll.results.length} dados · dificultad ${esc(roll.diff)}</small>
-    ${roll.combat ? `<small>Combate · ${roll.combat.action==='defensive'?'Defensa o absorción':'Ataque'} · ${esc(roll.combat.item)}${roll.combat.equipmentDice?' · +'+esc(roll.combat.equipmentDice)+' dados de equipo':''}</small>` : ''}
+    ${roll.combat ? `<small>Combate · ${roll.combat.action==='defensive'?'Defensa o absorción':roll.combat.action==='damage'?'Daño':'Ataque'} · ${esc(roll.combat.item)}${roll.combat.equipmentDice?' · +'+esc(roll.combat.equipmentDice)+' dados de equipo':''}</small>` : ''}
+    ${roll.combat?.nen ? `<small>${esc(roll.combat.nen.name)} · ${esc(roll.combat.nen.cost)} Nen gastados${roll.combat.nen.dice ? ' · ajuste de dados: '+esc(roll.combat.nen.dice) : ''}${roll.combat.nen.damage ? ' · +'+esc(roll.combat.nen.damage)+' al daño' : ''}</small>` : ''}
+    ${Number.isInteger(roll.combat?.damage) ? `<small>Daño antes de absorción: <b>${esc(roll.combat.damage)}</b></small>` : ''}
     <div class="dice-results">${roll.results.map(value=>`<span class="pill ${value>=roll.diff?'dice-hit':''}">${esc(value)}</span>`).join('')}</div>
-    <small>${esc(roll.hits)} éxitos por dados + ${esc(roll.bonus)} automáticos${roll.successAdjustment ? ' · ajuste de méritos y defectos: '+esc(roll.successAdjustment) : ''} ${roll.canceledByOnes?'− '+esc(roll.ones)+' por unos':''}${roll.willpower?' · +1 éxito asegurado por Voluntad':''} = <b>${esc(roll.net)} éxitos</b>${roll.canceledByOnes?'':' · unos: '+esc(roll.ones)}</small>
+    <small>${esc(roll.hits)} éxitos por dados + ${esc(roll.bonus)} automáticos${roll.successAdjustment ? ' · ajuste de méritos y defectos: '+esc(roll.successAdjustment) : ''} ${roll.canceledByOnes?'− '+esc(roll.ones)+' por unos':''}${roll.combat?.nen?.success?' · +'+esc(roll.combat.nen.success)+' éxitos Nen':''}${roll.willpower?' · +1 éxito asegurado por Voluntad':''} = <b>${esc(roll.net)} éxitos</b>${roll.canceledByOnes?'':' · unos: '+esc(roll.ones)}</small>
     ${Array.isArray(roll.modifiers) && roll.modifiers.length ? `<small>Rasgos aplicados: ${roll.modifiers.filter(item=>item && Object.hasOwn(traitRollTargets,item.target)).map(item=>esc(item.name)+' ('+(item.value>0?'+':'')+esc(item.value)+' '+traitRollTargets[item.target]+')').join(' · ')}</small>` : ''}
   </div></div>`;
 }
@@ -1275,10 +1367,12 @@ function renderMarket(){let e=economy(),root=document.getElementById('marketPage
 const openGroups = new Set([...root.querySelectorAll('[data-market-group][open]')].map(group=>group.dataset.marketGroup));
 const previousCombatIndex = marketInput('combatEquipment')?.value;
 const previousCombatKey = marketInput('combatEquipment')?.selectedOptions[0]?.dataset.itemKey;
-const stateIds = ['combatAction','diceMode','diceCount','diceDiff','diceBonus','diceLabel','diceAttribute','diceSkill','marketSearch'];
+const wasCombat = marketInput('diceCombat')?.checked;
+const stateIds = ['combatAction','combatShu','combatRyu','combatNenDice','diceMode','diceCount','diceDiff','diceBonus','diceLabel','diceAttribute','diceSkill','marketSearch'];
 const inputs = new Map(stateIds.map(id=>[id,marketInput(id)?.value]));
 let products=allProducts(),weapons=weaponCatalog;root.innerHTML=`<div class="section-title">Juego, dados y mercado</div><div class="stats"><div class="stat"><small>Saldo actual</small><strong>${e.balance===null?'Sin iniciar':yen(e.balance)}</strong></div><div class="stat"><small>Artículos en inventario</small><strong>${e.inventory.reduce((a,x)=>a+x.qty,0)}</strong></div><div class="stat"><small>Operaciones registradas</small><strong>${e.ledger.length}</strong></div></div><div class="market-note"><b>Regla casera de mejoras:</b> ofensivas ×5 / ×25 / ×125 (+1 a +3 dados de precisión y daño); defensivas ×10 / ×100 / ×1000 (+1 a +3 dados de defensa o absorción cuando aplique). +2 requiere aprobación del narrador; +3 bloqueado durante creación. Las bonificaciones defensivas superpuestas no se acumulan. <label><input type="checkbox" style="width:auto" ${e.campaignStarted?'checked disabled':''} onchange="setCampaignPhase(this.checked)"> Campaña iniciada (cierra el reparto inicial y el uso de PG)</label></div><div class="market-grid" style="margin-top:15px"><div class="market-card"><h2>Dinero y cuenta</h2><p class="muted">El manual establece 1D10 millones de yenes al comenzar. Se usa equivalencia operativa 1 yen del manual = 1 Jenny (J) para compatibilidad de fichas; es una regla de mesa, no una equivalencia canónica.</p><button class="primary" onclick="initialMoney()">Lanzar 1D10 para dinero inicial</button> <button onclick="setBalance()">Fijar saldo</button><div class="grid"><label>Importe (millones de yenes)<input id="moneyAmount" type="number" min="0.0001" step="any" placeholder="Ej. 2.5"></label><label>Concepto<input id="moneyReason" placeholder="Recompensa, misión, alojamiento…"></label></div><div class="wallet-actions"><button onclick="moneyMovement('Ingreso')">+ Registrar ingreso</button><button onclick="moneyMovement('Gasto')">− Registrar gasto</button></div><p class="market-note">El saldo se almacena en <b>millones de unidades</b>: 0,5 = 500.000 J. Los precios del canon, estimaciones y valores del narrador están identificados por su fuente. El saldo puede quedar negativo únicamente con confirmación.</p></div>${dicePanel()}</div><div class="market-card dice-history" data-character-resources>${characterResourceControls(d,true)}</div><section class="market-card dice-history"><h2>Historial de tiradas</h2><button id="clearDiceHistory" type="button" onclick="clearDiceHistory()">Borrar historial</button><div id="diceHistoryList"></div></section><div class="market-grid" style="margin-top:15px"><div class="market-card"><h2>Mercado y compras</h2><p class="muted">Precios en Jenny (J). Los artículos comunes se estiman con referencias de precios japoneses; los valores de armamento son convenciones ficticias para la mesa, no precios reales verificados. La licencia auténtica de cazador no está a la venta.</p><label>Buscar artículo<input id="marketSearch" placeholder="Buscar por nombre o categoría" oninput="filterProducts()"></label><div id="productList">${groupedItems(products,'catalog',x=>`<div class="market-row" data-product="${esc((x.name+' '+x.category).toLowerCase())}"><div><b>${esc(x.name)}</b><small>${esc(x.category)} · ${x.price===null?'Sin precio':(Math.round(x.price*1000000).toLocaleString('es-CL')+' J')}</small><small>${esc(x.description||'')}</small><small>${esc(x.source||'')}</small>${qualitySelect(x.id,productRole(x))}</div><button onclick="buyProduct('${x.id}')" ${x.price===null?'disabled':''}>${x.price===null?'Sin precio':'Comprar'}</button></div>`)}</div></div><div class="market-card"><h2>Inventario del personaje</h2><details class="market-category"><summary>Agregar artículo al mercado</summary><p class="muted">Los precios de canon se distinguen de las estimaciones de mesa y los valores ficticios de armamento. Puedes añadir objetos y valores acordados con el narrador.</p><label>Nombre<input id="newProductName" placeholder="Ej. Botiquín de emergencia"></label><div class="grid"><label>Precio unitario (millones)<input id="newProductPrice" type="number" min="0" step="any" placeholder="Ej. 0.1"></label><label>Categoría<select id="newProductCategory"><option>Equipo</option><option>Consumibles</option><option>Armas</option><option>Defensa</option><option>Servicios</option><option>Objetos especiales</option><option>Otros</option></select></label></div><label>Descripción y efecto<textarea id="newProductDesc" placeholder="Qué hace, limitaciones, aprobación del narrador…"></textarea></label><button onclick="addProduct()">Agregar al mercado</button></details>${e.inventory.length?groupedItems(e.inventory,'inventory',(x,i)=>`<div class="market-row"><div><b>${esc(x.name)}</b><small>${esc(x.category)} · ${yen(x.unitPrice)} / unidad</small><small>${esc(x.description||'')}</small>${x.quality?`<small>Bonificación: +${esc(x.quality)} dados de ${x.role==='defensive'?'defensa/absorción':'precisión y daño'}</small>`:''}</div><div>${['offensive','defensive'].includes(x.role)?`<button onclick="upgradeInventory(${i})">Mejorar</button> `:''}<button onclick="changeInventory(${i},-1)">−</button> <b>${esc(x.qty)}</b> <button onclick="changeInventory(${i},1)">+</button></div></div>`):'<p class="muted">No hay artículos adquiridos todavía.</p>'}<p class="market-note">Los botones +/− del inventario ajustan cantidades físicas; no cobran ni devuelven dinero. Para registrar otra compra utiliza el mercado.</p></div></div><div class="market-grid" style="margin-top:15px"><div class="market-card"><h2>Libro de movimientos</h2>${e.ledger.slice().reverse().slice(0,30).map(x=>`<div class="market-row"><div><b>${esc(x.type)} · ${esc(x.item)}</b><small>${esc(x.date)}</small></div><b class="${x.amount>=0?'ok':'bad'}">${x.amount>=0?'+':''}${yen(x.amount)}</b></div>`).join('')||'<p class="muted">Sin movimientos.</p>'}</div><div class="market-card"><h2>Referencia de armas del manual</h2><p class="muted">La dificultad, daño y demás atributos proceden de la tabla del manual. Los precios son orientativos para la ficción, no cotizaciones comerciales ni canon.</p><div style="overflow:auto"><table style="border-collapse:collapse;width:100%;font-size:12px"><thead><tr>${['Arma','Dif.','Calibre','Alcance','Daño','Carga','Ocultación'].map(x=>`<th style="padding:7px;border-bottom:1px solid #50617a">${x}</th>`).join('')}</tr></thead><tbody>${weapons.map(w=>`<tr>${w.map(x=>`<td style="padding:6px;border-bottom:1px solid #344359">${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div></div><p class="market-note">Todo se almacena junto a la ficha del personaje y se incluye al exportar/importar el archivo JSON. Para conservar los cambios en otros dispositivos, usa «Guardar ficha en la campaña».</p>`;
   for (const [id,value] of inputs) if (value!==undefined) marketInput(id).value = value;
+  marketInput('diceCombat').checked = !!wasCombat;
   const combatSelect = marketInput('combatEquipment');
   if (previousCombatIndex && previousCombatKey) {
     const options = [...combatSelect.options].filter(option=>option.dataset.itemKey===previousCombatKey);
