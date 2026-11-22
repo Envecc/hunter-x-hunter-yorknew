@@ -34,6 +34,33 @@
 .will-boxes .will-box{justify-content:center;min-width:0;padding:0;cursor:pointer}
 .will-boxes input[type="checkbox"]{inline-size:1.05rem;block-size:1.05rem;accent-color:#69db8f}
 .will-boxes .will-box:has(:disabled){cursor:default}
+
+.top-switch{
+  position:sticky;top:0;z-index:8;box-sizing:border-box;height:62px;
+  align-items:center;overflow-x:auto;background:#0b1019;border-bottom:1px solid #334157;
+  scrollbar-width:thin
+}
+.top-switch button{min-height:40px;padding:8px 12px;white-space:nowrap}
+#characterPage{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;align-items:start}
+#characterPage .tabs{
+  top:70px;display:flex;flex-direction:column;align-self:start;min-width:0;
+  max-height:calc(100dvh - 78px);margin:0;padding:0 0 6px;scrollbar-width:thin
+}
+#characterPage .jump{line-height:1.35}
+#characterPage .jump:focus-visible,.top-switch button:focus-visible{outline:2px solid #f6d58a;outline-offset:-3px}
+@media(max-width:960px), (max-height:460px){
+  #characterPage{display:block}
+  #characterPage .tabs{top:62px;flex-direction:row;max-height:none;padding:6px 0;margin:0 0 12px}
+  .sheet-section{scroll-margin-top:124px}
+}
+@media(max-width:650px){
+  .top-switch{padding-inline:10px}
+  .top-switch button{flex:0 0 auto}
+}
+@media print{
+  .top-switch,#characterPage .tabs{display:none}
+  #characterPage{display:block}
+}
 </style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · V16 · cambios y costos en tiempo real</div></header>
 <section class="panel" id="campaignSignIn">
   <h2>Entrar a la campaña</h2><p>Si ya aceptaste tu invitación, tu cuenta está habilitada. Si cerraste sesión o cambiaste de navegador, pide un enlace para volver a entrar.</p>
@@ -59,7 +86,16 @@
   </div>
   <p id="campaignStatus" role="status"></p>
 </section>
-<div class="top-switch"><button id="switch-character" class="selected" onclick="switchPage('character')">01 · Creación de personaje</button><button id="switch-market" onclick="switchPage('market')">02 · Juego, dados y mercado</button><button id="switch-experience" onclick="switchPage('experience')">03 · Experiencia</button><button id="switch-narrator" onclick="switchPage('narrator')">Narrador</button></div><main id="characterPage"><section class="panel" aria-label="Estado de la ficha">
+<nav class="top-switch" aria-label="Navegación principal"><button id="switch-character" class="selected" onclick="switchPage('character')">01 · Creación de personaje</button><button id="switch-market" onclick="switchPage('market')">02 · Juego, dados y mercado</button><button id="switch-experience" onclick="switchPage('experience')">03 · Experiencia</button><button id="switch-narrator" onclick="switchPage('narrator')">Narrador</button></nav><main id="characterPage"><nav class="tabs" id="tabs" aria-label="Secciones de la ficha">
+  <a class="jump" href="#sec0">Identidad</a>
+  <a class="jump" href="#sec1">Atributos</a>
+  <a class="jump" href="#sec2">Habilidades</a>
+  <a class="jump" href="#sec3">Nen y Hatsu</a>
+  <a class="jump" href="#sec4">Méritos y defectos</a>
+  <a class="jump" href="#sec5">Técnicas</a>
+  <a class="jump" href="#sec7">Ficha</a>
+  <a class="jump" href="#sec8">Diario de campaña</a>
+</nav><div class="character-content"><section class="panel" aria-label="Estado de la ficha">
   <strong id="sheetPhase"></strong>
   <p id="sheetPhaseDetail" class="sub"></p>
   <button id="finishCreation" type="button" onclick="setCampaignPhase(true)" hidden>Finalizar creación</button>
@@ -74,7 +110,7 @@
     <button value="import">Importar como borrador</button>
   </form>
 </dialog>
-<div class="stats" id="stats"></div><div class="tabs" id="tabs"></div><div id="content"></div>
+<div class="stats" id="stats"></div><div id="content"></div>
 <section class="panel"><button id="campaignDelete" type="button">Eliminar ficha</button></section>
 <dialog id="campaignDeleteDialog" class="panel" aria-labelledby="campaignDeleteTitle">
   <h2 id="campaignDeleteTitle">Confirmar eliminación</h2>
@@ -84,7 +120,7 @@
     <button id="campaignDeleteConfirm" type="submit">Sí, eliminar ficha</button>
   </form>
   <p id="campaignDeleteStatus" role="status"></p>
-</dialog></main><main id="marketPage" style="display:none"></main><main id="experiencePage" hidden><div id="experienceContent"></div><section id="campaignAwards" class="panel" hidden></section></main><main id="narratorPage" hidden>
+</dialog></div></main><main id="marketPage" style="display:none"></main><main id="experiencePage" hidden><div id="experienceContent"></div><section id="campaignAwards" class="panel" hidden></section></main><main id="narratorPage" hidden>
   <section class="panel">
     <h2>Mesa del narrador</h2>
     <section class="panel">
@@ -737,7 +773,7 @@ function renderSheetPhase(totals) {
     : issues.length ? issues.join(' · ') : 'Puedes finalizar la creación. Revisa tu afinidad Hatsu antes de confirmar.';
 }
 
-function render(){const b=budget();renderSheetPhase(b);document.getElementById('stats').innerHTML=[['Atributos',creationPoolLabel(b.a,12)],['Habilidades',creationPoolLabel(b.s,25)],['Nen inicial',creationPoolLabel(b.n,b.nb)],['Gratuitos',b.free],['PX general',d.xp],['PX Nen',d.xpNen],['Reserva aura',d.hatsu*10+d.reserveBonus]].map(([k,v])=>`<div class="stat"><small>${k}</small><strong class="${typeof v==='number'&&v<0?'bad':''}">${v}</strong></div>`).join('');let tabs=['Identidad','Atributos','Habilidades','Nen y Hatsu','Méritos y defectos','Técnicas','Experiencia','Ficha','Diario de campaña'];document.getElementById('tabs').innerHTML=tabs.map((x,i)=>i===6?'':`<a class="jump" href="#sec${i}">${x}</a>`).join('');let c='';c+=`<section id="sec0" class="sheet-section"><div class="section-title">01 · Identidad</div>`+`<div class="panel"><h2>Identidad del personaje</h2><div class="identity-layout"><div><div class="grid">${field('name','Nombre')}${field('age','Edad','number')}${field('type','Tipo de cazador / ocupación')}${field('personality','Personalidad')}${field('height','Tamaño (normal 5)','number')}<label>Etapa<select onchange="setNenStage(this.value)" ${creationIsClosed()?'disabled':''}><option ${d.tier==='Novato'?'selected':''}>Novato</option><option ${d.tier==='Controlador'?'selected':''}>Controlador</option></select></label></div><label>Historia<textarea onchange="set('bio',this.value)">${esc(d.bio)}</textarea></label></div><aside class="identity-photo"><img class="portrait" alt="Retrato del personaje" src="${safePortrait(d.portrait)}"><label>Retrato<input type="file" accept="image/*" onchange="uploadPortrait(this)"></label><button onclick="d.portrait='';save();render()">Quitar imagen</button></aside></div></div>`;
+function render(){const b=budget();renderSheetPhase(b);document.getElementById('stats').innerHTML=[['Atributos',creationPoolLabel(b.a,12)],['Habilidades',creationPoolLabel(b.s,25)],['Nen inicial',creationPoolLabel(b.n,b.nb)],['Gratuitos',b.free],['PX general',d.xp],['PX Nen',d.xpNen],['Reserva aura',d.hatsu*10+d.reserveBonus]].map(([k,v])=>`<div class="stat"><small>${k}</small><strong class="${typeof v==='number'&&v<0?'bad':''}">${v}</strong></div>`).join('');let c='';c+=`<section id="sec0" class="sheet-section"><div class="section-title">01 · Identidad</div>`+`<div class="panel"><h2>Identidad del personaje</h2><div class="identity-layout"><div><div class="grid">${field('name','Nombre')}${field('age','Edad','number')}${field('type','Tipo de cazador / ocupación')}${field('personality','Personalidad')}${field('height','Tamaño (normal 5)','number')}<label>Etapa<select onchange="setNenStage(this.value)" ${creationIsClosed()?'disabled':''}><option ${d.tier==='Novato'?'selected':''}>Novato</option><option ${d.tier==='Controlador'?'selected':''}>Controlador</option></select></label></div><label>Historia<textarea onchange="set('bio',this.value)">${esc(d.bio)}</textarea></label></div><aside class="identity-photo"><img class="portrait" alt="Retrato del personaje" src="${safePortrait(d.portrait)}"><label>Retrato<input type="file" accept="image/*" onchange="uploadPortrait(this)"></label><button onclick="d.portrait='';save();render()">Quitar imagen</button></aside></div></div>`;
 c+=`<section id="sec1" class="sheet-section"><div class="section-title">02 · Atributos</div>`+priorityPanel('attrs')+`<div class="grid">${[['Físicos',attributes.slice(0,3)],['Sociales',attributes.slice(3,6)],['Mentales',attributes.slice(6)]].map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'attrs')}</div>`).join('')}</div><div class="notice">Reparte 12 puntos entre todos los atributos. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 5 PG.</div>`;
 c+=`<section id="sec2" class="sheet-section"><div class="section-title">03 · Habilidades</div>`+priorityPanel('skills')+`<div class="grid">${Object.entries(skills).map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'skills')}</div>`).join('')}</div><div class="notice">Reparte 25 puntos entre todas las habilidades. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 2 PG.</div>`;
 c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Nen y Hatsu</div>`+`<div class="grid"><div class="panel"><h2>Técnicas Nen</h2><p><b>${creationPoolLabel(b.n,b.nb)}</b></p><p class="sub">Reparte los puntos iniciales entre Ten, Ren y Zetsu. Las técnicas avanzadas requieren sus condiciones y cuestan 2 PG por círculo al crear.</p>${nenTechniqueRows()}</div><div class="panel"><h2>Afinidad y caminos</h2><label>Afinidad<select ${creationIsClosed()?'disabled':''} onchange="changeAffinity(this)">${paths.map(x=>`<option ${d.affinity===x?'selected':''}>${x}</option>`).join('')}</select></label>${creationPathsPanel()}<div class="trait">Hatsu general <small>${nenStage(d.tier).hatsu} inicial · 4 PG por punto adicional</small> <span class="controls"><button onclick="adjustCreationBonus('hatsu',-1)" ${creationIsClosed()?'disabled':''}>−</button>${d.hatsu}<button onclick="adjustCreationBonus('hatsu',1)" ${purchaseButton(creationIncrease('hatsu',null,b))}>+ 4 PG</button></span></div>${affinityDiagram()}</div></div>${creationPointPanel(b)}<div class="notice">Requisitos de técnicas avanzadas verificados al aumentar. Los caminos Hatsu se desarrollan con PX generales desde Experiencia.</div>`;
