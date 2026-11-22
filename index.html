@@ -34,6 +34,10 @@
   <button id="campaignLogout" type="button">Cerrar sesión</button>
   <span id="campaignRole"></span>
   <label id="campaignProfileControl" hidden>Perfil activo<select id="campaignProfile"><option value="narrator">Narrador</option><option value="player">Jugador</option></select></label>
+  <div id="campaignNpcEditor" hidden>
+    <button id="campaignBackFromNpc" type="button">Volver al archivo de NPC</button>
+    <label>Vincular a ficha de jugador<select id="campaignNpcLink"></select></label>
+  </div>
   <div id="campaignPlayer" hidden>
     <label>Fichas guardadas<select id="campaignSheets"></select></label>
     <button id="campaignOpen" type="button">Abrir ficha</button>
@@ -47,6 +51,13 @@
 <div class="top-switch"><button id="switch-character" class="selected" onclick="switchPage('character')">01 · Creación de personaje</button><button id="switch-market" onclick="switchPage('market')">02 · Juego, dados y mercado</button><button id="switch-experience" onclick="switchPage('experience')">03 · Experiencia</button><button id="switch-narrator" onclick="switchPage('narrator')">Narrador</button></div><main id="characterPage"><div class="stats" id="stats"></div><div class="tabs" id="tabs"></div><div id="content"></div></main><main id="marketPage" style="display:none"></main><main id="experiencePage" hidden><div id="experienceContent"></div><section id="campaignAwards" class="panel" hidden></section></main><main id="narratorPage" hidden>
   <section class="panel">
     <h2>Mesa del narrador</h2>
+    <section class="panel">
+      <h3>Archivo de NPC</h3>
+      <label>NPC guardados<select id="campaignNpcList"></select></label>
+      <button id="campaignNpcNew" type="button">Crear NPC</button>
+      <button id="campaignNpcEdit" type="button">Abrir NPC</button>
+      <button id="campaignNpcDraft" type="button" hidden>Continuar borrador NPC</button>
+    </section>
     <p>Importa los archivos JSON de tus jugadores. Las fichas y revisiones se guardan en este navegador.</p>
     <button id="campaignRefresh" type="button">Actualizar fichas de la campaña</button><label>Importar fichas<input id="reviewFiles" type="file" accept=".json" multiple></label>
     <label>Personaje<select id="reviewSelect"></select></label>
@@ -259,7 +270,13 @@ function categoryCost(kind,cat){let names=kind==='attrs'?attributes.filter(x=>ca
 function categoryLimit(kind,cat){return PRIORITY_LIMITS[kind][priorityOrder(kind).indexOf(cat)]}
 function changePriority(kind,cat,rank){const k=kind==='attrs'?'attrPriority':'skillPriority';let old=priorityOrder(kind),idx=old.indexOf(cat),next=old.slice();[next[idx],next[rank]]=[next[rank],next[idx]];if(CATEGORY_NAMES.some(c=>categoryCost(kind,c)>PRIORITY_LIMITS[kind][next.indexOf(c)])){alert('La nueva prioridad no admite la distribución actual. Reduce primero los puntos de las categorías afectadas.');render();return}d[k]=next;save();render()}
 function priorityPanel(kind){let order=priorityOrder(kind),labels=['Primaria','Secundaria','Terciaria'];return `<div class="panel"><h2>Prioridades de ${kind==='attrs'?'atributos':'habilidades'}</h2><label><input type="checkbox" style="width:auto" ${d.usePriorities?.[kind]?'checked':''} onchange="set('usePriorities',{...d.usePriorities,${kind}:this.checked})"> Aplicar prioridades por categoría</label><p class="muted">Regla opcional de mesa: selecciona qué categoría recibe cada presupuesto. El manual indica ${kind==='attrs'?'12':'25'} puntos totales, sin fijar aquí una distribución por categorías.</p><div class="grid">${CATEGORY_NAMES.map(cat=>`<label>${cat}<select onchange="changePriority('${kind}','${cat}',Number(this.value))">${labels.map((l,i)=>`<option value="${i}" ${order.indexOf(cat)===i?'selected':''}>${l} · ${PRIORITY_LIMITS[kind][i]} puntos</option>`).join('')}</select><small>${categoryCost(kind,cat)} / ${categoryLimit(kind,cat)} puntos usados</small></label>`).join('')}</div><p class="muted">Para cambiar dos prioridades se intercambian automáticamente. El quinto círculo cuesta 2 puntos. Los incrementos posteriores por experiencia se gestionan por separado.</p></div>`}
-function save(){localStorage.setItem(campaignDraftKey || 'yorknew_char',JSON.stringify(d))}function set(k,v){d[k]=v;save();render()}function adjust(kind,key,delta) {
+function save() {
+  localStorage.setItem(campaignDraftKey || 'yorknew_char',JSON.stringify(d));
+  if (campaignRole === 'npc') {
+    localStorage.setItem(campaignDraftKey+':saved-sheet',JSON.stringify(campaignSheet));
+    appElement('campaignNpcDraft').hidden = false;
+  }
+}function set(k,v){d[k]=v;save();render()}function adjust(kind,key,delta) {
   const current = integer(d[kind][key]);
   const next = current+delta;
   const minimum = (kind==='attrs'?1:0)+(experienceLevels(d).get(key)||0);
@@ -771,6 +788,11 @@ function renderReviews() {
     <h3>Defectos</h3><ul>${list(sheet.defects)}</ul><h3>Técnicas</h3><ul>${list(sheet.techniques)}</ul></details>
     <details><summary>Historia y diario</summary>${[sheet.personality,sheet.bio,sheet.storyNotes,sheet.sessionNotes,sheet.tableOpinions]
       .filter(Boolean).map(note => `<p style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(note)}</p>`).join('')}</details>`;
+  const linkedNpc = campaignNpcRows.filter(row=>row.sheet.npcFor===entry.key);
+  if (linkedNpc.length) {
+    reviewElement('reviewSheet').insertAdjacentHTML('beforeend',
+      '<h3>NPC vinculados</h3><ul>'+linkedNpc.map(row=>'<li>'+esc(row.sheet.name || 'NPC sin nombre')+'</li>').join('')+'</ul>');
+  }
   reviewElement('reviewHistory').innerHTML = reviewHistory(entry.reviews,true);
 }
 
@@ -880,6 +902,9 @@ async function applyReview(input) {
 let campaignDraftKey = '';
 let campaignUser = null;
 let campaignRole = '';
+let campaignNpcRows = [];
+let campaignPlayerSheet = null;
+let campaignPlayerRows = [];
 let campaignCanNarrate = false;
 let campaignSheet = null;
 let campaignRows = [];
@@ -905,6 +930,9 @@ async function openCampaign(session) {
   campaignRole = '';
   campaignDraftKey = '';
   campaignRows = [];
+  campaignNpcRows = [];
+  campaignPlayerRows = [];
+  campaignPlayerSheet = null;
   campaignSheet = null;
   if (!session) return;
   const user = cloudResult(await campaignClient.auth.getUser()).user;
@@ -931,40 +959,68 @@ async function openCampaign(session) {
 }
 
 async function selectCampaignProfile(role) {
-  if (!campaignUser || (role === 'narrator' && !campaignCanNarrate)) return;
-  campaignRole = role;
-  const isPlayer = role === 'player';
-  appElement('campaignProfile').value = role;
-  appElement('campaignRole').textContent = isPlayer ? 'Jugador' : 'Narrador';
-  for (const id of ['campaignPlayer','switch-character','switch-market','switch-experience']) {
-    appElement(id).hidden = !isPlayer;
+  if (!campaignUser || (role !== 'player' && !campaignCanNarrate)) return;
+  const wasNpc = campaignRole === 'npc';
+  const isNpc = role === 'npc';
+  if (wasNpc !== isNpc) {
+    if (wasNpc) save();
+    if (isNpc) campaignPlayerSheet = campaignSheet;
+    campaignDraftKey = (isNpc ? 'yorknew_npc:' : 'yorknew_char:') + campaignUser.id;
+    campaignSheet = isNpc ? null : campaignPlayerSheet;
+    try {
+      d = {...fresh(),...JSON.parse(localStorage.getItem(campaignDraftKey))};
+      if (isNpc) campaignSheet = JSON.parse(localStorage.getItem(campaignDraftKey+':saved-sheet'));
+    } catch {d = fresh()}
+    appElement('campaignAwards').replaceChildren();
+    appElement('campaignAwards').hidden = true;
+    appElement('campaignHistory').replaceChildren();
   }
-  appElement('switch-narrator').hidden = isPlayer;
+  campaignRole = role;
+  const editable = role !== 'narrator';
+  appElement('campaignProfile').value = isNpc ? 'narrator' : role;
+  appElement('campaignRole').textContent = isNpc ? 'Narrador · Edición de NPC' : editable ? 'Jugador' : 'Narrador';
+  appElement('campaignNpcEditor').hidden = !isNpc;
+  appElement('campaignLegacy').hidden = isNpc || !localStorage.getItem('yorknew_char');
+  for (const id of ['campaignPlayer','switch-character','switch-market','switch-experience']) {
+    appElement(id).hidden = !editable;
+  }
+  appElement('switch-narrator').hidden = editable;
+  appElement('campaignStore').textContent = isNpc ? 'Guardar NPC en el archivo' : 'Guardar ficha en la campaña';
   campaignMessage('');
-  if (isPlayer) render();
-  switchPage(isPlayer ? 'character' : 'narrator');
+  if (editable) render();
+  switchPage(editable ? 'character' : 'narrator');
   await refreshCampaign();
 }
+
+function populateCampaignSelect(id,rows,placeholder,selected='') {
+  const select = appElement(id);
+  select.replaceChildren(new Option(placeholder,''),...rows.map(row=>
+    new Option(row.sheet.name || 'Personaje sin nombre',row.id)));
+  if (rows.some(row=>row.id===selected)) select.value = selected;
+}
+
 async function refreshCampaign() {
   const role = campaignRole;
-  let query = campaignClient.from('yorknew_sheets').select('id,sheet,updated_at');
-  if (role === 'player') query = query.eq('owner_id',campaignUser.id);
+  let query = campaignClient.from('yorknew_sheets').select('id,sheet,updated_at,is_npc,owner_id');
+  if (role === 'player') query = query.eq('owner_id',campaignUser.id).eq('is_npc',false);
   const rows = cloudResult(await query.order('updated_at',{ascending:false}));
   if (role !== campaignRole) return;
-  campaignRows = rows;
+  campaignPlayerRows = rows.filter(row=>!row.is_npc);
+  campaignNpcRows = rows.filter(row=>row.is_npc);
   if (role === 'narrator') {
-    reviewSheets = campaignRows.map(row => ({key:row.id,cloud:true,sheet:row.sheet,reviews:[]}));
-    if (!reviewSheets.some(row => row.key === reviewKey)) reviewKey = reviewSheets[0]?.key || '';
+    populateCampaignSelect('campaignNpcList',campaignNpcRows,'Elige un NPC',appElement('campaignNpcList').value);
+    appElement('campaignNpcDraft').hidden = !localStorage.getItem('yorknew_npc:'+campaignUser.id);
+    reviewSheets = campaignPlayerRows.map(row => ({key:row.id,cloud:true,sheet:row.sheet,reviews:[]}));
+    if (!reviewSheets.some(row => row.key===reviewKey)) reviewKey = reviewSheets[0]?.key || '';
     renderReviews();
     await loadCampaignReviews();
   } else {
-    const selected = appElement('campaignSheets').value;
-    appElement('campaignSheets').replaceChildren(new Option('Elige una ficha',''),...campaignRows.map(row =>
-      new Option(row.sheet.name || 'Personaje sin nombre',row.id)));
-    if (selected && campaignRows.some(row => row.id === selected)) appElement('campaignSheets').value = selected;
+    campaignRows = role==='npc' ? campaignNpcRows.filter(row=>row.owner_id===campaignUser.id) : campaignPlayerRows;
+    const select = appElement('campaignSheets');
+    populateCampaignSelect('campaignSheets',campaignRows,role==='npc'?'Elige un NPC':'Elige una ficha',campaignSheet?.id||select.value);
+    if (role==='npc') populateCampaignSelect('campaignNpcLink',campaignPlayerRows,'Sin vínculo',d.npcFor);
   }
 }
-
 async function loadCampaignReviews() {
   if (!reviewKey) return;
   const key = reviewKey;
@@ -1032,13 +1088,14 @@ async function storeCampaignSheet(sheet) {
   const query = campaignClient.from('yorknew_sheets');
   if (campaignSheet) {
     const updated = cloudResult(await query.update({sheet}).eq('id',campaignSheet.id)
-      .eq('updated_at',campaignSheet.updated_at).select('id,updated_at').maybeSingle());
+      .eq('updated_at',campaignSheet.updated_at).eq('is_npc',campaignRole==='npc').select('id,updated_at').maybeSingle());
     if (!updated) throw new Error('La ficha cambió en otra sesión. Exporta tu borrador y vuelve a abrir la ficha guardada.');
     campaignSheet = updated;
   } else {
-    campaignSheet = cloudResult(await query.insert({sheet}).select('id,updated_at').single());
+    campaignSheet = cloudResult(await query.insert({sheet,is_npc:campaignRole==='npc'}).select('id,updated_at').single());
   }
-  campaignMessage('Ficha guardada en la campaña.');
+  if (campaignRole==='npc') save();
+  campaignMessage(campaignRole==='npc'?'NPC guardado en el archivo.':'Ficha guardada en la campaña.');
 }
 
 async function campaignAction(button, action) {
@@ -1063,23 +1120,57 @@ campaignButton('campaignLogout',async () => {
   cloudResult(await campaignClient.auth.signOut({scope:'local'}));
   location.replace(campaignUrl);
 });
-campaignButton('campaignOpen',async () => {
-  const id = appElement('campaignSheets').value;
+async function openEditableCampaignSheet(id) {
   if (!id) return;
-  const row = cloudResult(await campaignClient.from('yorknew_sheets').select('id,sheet,updated_at').eq('id',id).eq('owner_id',campaignUser.id).single());
+  const isNpc = campaignRole==='npc';
+  const row = cloudResult(await campaignClient.from('yorknew_sheets').select('id,sheet,updated_at')
+    .eq('id',id).eq('owner_id',campaignUser.id).eq('is_npc',isNpc).single());
   campaignSheet = {id:row.id,updated_at:row.updated_at};
   d = {...fresh(),...row.sheet};
   save();
   render();
   appElement('campaignHistory').replaceChildren();
-  campaignMessage('Ficha abierta.');
-  await showCampaignAwards();
-});
+  if (isNpc) populateCampaignSelect('campaignNpcLink',campaignPlayerRows,'Sin vínculo',d.npcFor);
+  campaignMessage(isNpc?'NPC abierto.':'Ficha abierta.');
+  if (!isNpc) await showCampaignAwards();
+}
+
+campaignButton('campaignOpen',()=>openEditableCampaignSheet(appElement('campaignSheets').value));
 campaignButton('campaignStore',async () => {
   await storeCampaignSheet(d);
   await refreshCampaign();
   appElement('campaignSheets').value = campaignSheet.id;
-  await showCampaignAwards();
+  if (campaignRole==='player') await showCampaignAwards();
+});
+campaignButton('campaignNpcNew',async () => {
+  if (!campaignCanNarrate) return;
+  if (localStorage.getItem('yorknew_npc:'+campaignUser.id) &&
+      !confirm('¿Reemplazar el borrador local de NPC por uno nuevo? Las fichas guardadas quedan en el archivo.')) return;
+  await selectCampaignProfile('npc');
+  resetCampaignSheet();
+  d = fresh();
+  populateCampaignSelect('campaignNpcLink',campaignPlayerRows,'Sin vínculo');
+  save();
+  render();
+});
+campaignButton('campaignNpcEdit',async () => {
+  if (!campaignCanNarrate) return;
+  const id = appElement('campaignNpcList').value;
+  const row = campaignNpcRows.find(item=>item.id===id);
+  if (!row) return;
+  if (row.owner_id!==campaignUser.id) {
+    reviewStatus('Este NPC pertenece a otro narrador.');
+    return;
+  }
+  if (localStorage.getItem('yorknew_npc:'+campaignUser.id) &&
+      !confirm('¿Reemplazar el borrador local por la última versión guardada del NPC?')) return;
+  await selectCampaignProfile('npc');
+  await openEditableCampaignSheet(id);
+});
+campaignButton('campaignNpcDraft',()=>selectCampaignProfile('npc'));
+campaignButton('campaignBackFromNpc',()=>selectCampaignProfile('narrator'));
+appElement('campaignNpcLink').addEventListener('change', event => {
+  if (campaignRole==='npc') {d.npcFor = event.target.value;save()}
 });
 campaignButton('campaignLegacy',async () => {
   const oldSheet = JSON.parse(localStorage.getItem('yorknew_char'));
