@@ -25,7 +25,7 @@
 .market-category summary small{color:#b7cadf}
 .selected-trait-effect,.dice-trait{margin:8px 0;padding:6px 8px;border:1px solid #43546b;border-radius:8px}.selected-trait-effect summary,.dice-trait summary{cursor:pointer}.selected-trait-effect p,.dice-trait p{margin:6px 0;font-size:.9rem}.will-boxes{display:flex;flex-wrap:wrap;gap:5px}
 .will-box{display:inline-flex;align-items:center;gap:4px;min-height:36px;padding:0 6px;margin:0}
-.will-box input[type="checkbox"]{width:auto;margin:0;accent-color:#efd18a}
+.will-box:has(input:disabled){opacity:.45}.will-box input[type="checkbox"]{width:auto;margin:0;accent-color:#efd18a}
 .character-resources h3{margin:12px 0 5px}
 </style><header><h1>HUNTER × HUNTER <span style="color:#f5c66d">/ YORKNEW CITY</span></h1><div class="sub">Ficha integral en una sola página · cambios y costos en tiempo real</div></header>
 <section class="panel" id="campaignSignIn">
@@ -140,6 +140,7 @@ const creationCaps = {attrs:12,skills:25};
 const creationCosts = {attrs:5,skills:2,nen:2,hatsu:4,willBonus:1,reserveBonus:1};
 const freeCreationPoints = 20;
 const willHistoryKey = 'Fuerza de Voluntad';
+const maxWillpower = 10;
 const integer = value => Number.isSafeInteger(Number(value)) ? Number(value) : 0;
 
 function nenStage(tier) {
@@ -247,6 +248,10 @@ function adjustCreationBonus(key,delta) {
     : key==='willBonus' ? (experienceLevels(d).get(willHistoryKey)||0) : 0;
   const value = integer(d[key])+delta;
   if (value<minimum || (key==='hatsu' && value>5)) return;
+  if (key==='willBonus' && delta>0 && rawWillpower({...d,willBonus:value})>maxWillpower) {
+    alert('La Fuerza de Voluntad tiene un máximo de 10.');
+    return;
+  }
   commitCreation({...d,[key]:value});
 }
 
@@ -262,7 +267,7 @@ function creationPointPanel() {
   return `<div class="panel"><h2>Puntos gratuitos</h2><p class="sub" role="status">${esc(state)}</p><p><strong>${totals.free} de ${freeCreationPoints} PG disponibles</strong></p>
     <div class="grid">${entries.map(([name,key,unit])=>`<p>${name} · <b>${totals.spent[key]} PG</b><br><small>${unit}</small></p>`).join('')}</div>
     <div class="trait"><span>Fuerza de Voluntad adicional <small>1 PG por punto</small></span>
-      <span class="controls"><button aria-label="Quitar un punto de Voluntad" onclick="adjustCreationBonus('willBonus',-1)" ${closed?'disabled':''}>−</button><b>${esc(d.willBonus)}</b><button aria-label="Añadir un punto de Voluntad" onclick="adjustCreationBonus('willBonus',1)" ${closed||pending.length?'disabled':''}>+</button></span></div>
+      <span class="controls"><button aria-label="Quitar un punto de Voluntad" onclick="adjustCreationBonus('willBonus',-1)" ${closed?'disabled':''}>−</button><b>${esc(d.willBonus)}</b><button aria-label="Añadir un punto de Voluntad" onclick="adjustCreationBonus('willBonus',1)" ${closed||pending.length||willpowerRating(d)>=maxWillpower?'disabled':''}>+</button></span></div>
     <div class="trait"><span>Reserva Nen adicional <small>3 de aura por 1 PG</small></span>
       <span class="controls"><button aria-label="Quitar tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',-3)" ${closed?'disabled':''}>−</button><b>${esc(d.reserveBonus)}</b><button aria-label="Añadir tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',3)" ${closed||pending.length?'disabled':''}>+</button></span></div>
   </div>`;
@@ -421,7 +426,7 @@ function traitSlots(kind,items) {
 function catalog(kind,items){let selected=d[kind];let groups=[...new Set(items.map(x=>x.category))];return traitSlots(kind,items)+`<details class="trait-reference"><summary>Consultar efectos de ${kind==="merits"?"los méritos":"los defectos"}</summary><label class="catalog-label">Buscar ${kind==='merits'?'mérito':'defecto'}<input id="search-${kind}" placeholder="Nombre o efecto" oninput="filterCatalog('${kind}',this.value)"></label><label>Categoría<select id="category-${kind}" onchange="filterCatalog('${kind}',document.getElementById('search-${kind}').value)"><option value="">Todas las categorías</option>${groups.map(g=>`<option>${esc(g)}</option>`).join('')}</select></label><div id="catalog-${kind}">${groups.map(group=>`<details class="trait-group"><summary>${esc(group)} · ${items.filter(x=>x.category===group).length}</summary>${items.filter(x=>x.category===group).map(item=>{let {name,min,max,affinity,description}=item;let found=selected.find(x=>x.name===name),chosen=!!found;let cost=found?found.cost:min;return `<details class="catalog-entry" data-search="${esc((name+' '+description).toLowerCase())}" data-category="${esc(group)}"><summary>${esc(name)} ${chosen?'✓':''} <small> · ${min===max?min:min+'–'+max} PG${affinity?' · '+affinity:''}</small></summary><p class="trait-description">${esc(description||'El manual no precisa una descripción adicional; consulta con el narrador.')}</p>${min!==max?`<label>Valor del rasgo (a acordar con el narrador)<select id="cost-${kind}-${items.indexOf(item)}">${Array.from({length:max-min+1},(_,i)=>`<option value="${i+min}" ${cost===i+min?'selected':''}>${i+min} PG</option>`).join('')}</select></label>`:''}<button class="${chosen?'primary':''}" onclick="toggle('${kind}',${traitCatalog.indexOf(item)},${min===max?min:`Number(document.getElementById('cost-${kind}-${items.indexOf(item)}').value)`})">${chosen?'Quitar selección':'Seleccionar '+(kind==='merits'?'mérito':'defecto')}</button>${affinity&&affinity!==d.affinity?'<p class="bad">No corresponde a la afinidad actual.</p>':''}</details>`}).join('')}</details>`).join('')}</div></details>`}
 function filterCatalog(kind,term){let cat=document.getElementById('category-'+kind)?.value||'';document.querySelectorAll('#catalog-'+kind+' .catalog-entry').forEach(el=>el.hidden=!(el.dataset.search.includes(term.toLowerCase().trim())&&(!cat||el.dataset.category===cat)));document.querySelectorAll('#catalog-'+kind+' .trait-group').forEach(el=>{el.hidden=![...el.querySelectorAll('.catalog-entry')].some(x=>!x.hidden);if(term.trim()||cat)el.open=true})}
 function experienceRating(kind,key) {
-  if (kind==='willBonus') return integer(d.attrs.Resistencia)+integer(d.attrs.Astucia)+integer(d.willBonus);
+  if (kind==='willBonus') return willpowerRating(d);
   return integer(kind==='hatsu'?d.hatsu:d[kind][key]);
 }
 
@@ -438,7 +443,7 @@ function spend(kind,key) {
     alert(current ? 'No cumple los requisitos de la técnica.' : 'El manual no define el costo de aprender una técnica desde 0 con PX. Consúltalo con el narrador.');
     return;
   }
-  if ((kind!=='willBonus' && current>=5) || Number(d[pool])<cost) {
+  if ((current>=(kind==='willBonus'?maxWillpower:5)) || Number(d[pool])<cost) {
     alert('Nivel máximo o experiencia insuficiente.');
     return;
   }
@@ -460,11 +465,20 @@ function progression(names,kind) {
     const level = experienceRating(kind,key);
     const cost = experienceCost(kind,level,key);
     const undefinedCost = kind==='nen' && level===0;
-    return `<div class="trait"><span>${esc(key)} · ${level}${kind==='willBonus'?'':'/5'} <small>${undefinedCost?'Costo desde 0 pendiente del narrador':'Próximo: '+cost+' PX'}</small></span><button onclick="spend('${kind}','${key}')" ${undefinedCost?'disabled':''}>Mejorar</button></div>`;
+    const willMax = kind==='willBonus' && level>=maxWillpower;
+    return `<div class="trait"><span>${esc(key)} · ${level}${kind==='willBonus'?'/'+maxWillpower:'/5'} <small>${undefinedCost?'Costo desde 0 pendiente del narrador':willMax?'Máximo alcanzado':'Próximo: '+cost+' PX'}</small></span><button onclick="spend('${kind}','${key}')" ${undefinedCost?'disabled':''}>Mejorar</button></div>`;
   }).join('');
 }
+function rawWillpower(sheet) {
+  return (integer(sheet.attrs.Resistencia)||1)+(integer(sheet.attrs.Astucia)||1)+integer(sheet.willBonus);
+}
+
+function willpowerRating(sheet) {
+  return Math.min(maxWillpower,Math.max(1,rawWillpower(sheet)));
+}
+
 function characterResources(sheet) {
-  const will = Math.max(0,(integer(sheet.attrs.Resistencia)||1)+(integer(sheet.attrs.Astucia)||1)+integer(sheet.willBonus));
+  const will = willpowerRating(sheet);
   const aura = Math.max(0,integer(sheet.hatsu)*10+integer(sheet.reserveBonus));
   const savedMarks = Array.isArray(sheet.willSpent) ? sheet.willSpent : [];
   const marks = [...new Set(savedMarks.filter(slot=>Number.isInteger(slot) && slot>=1 && slot<=will))];
@@ -477,11 +491,10 @@ function characterResourceControls(sheet,editable=false) {
   return `<section class="character-resources">
     <h3>Fuerza de Voluntad</h3>
     <p><strong>${will-marks.length} / ${will}</strong> disponibles · ${marks.length} gastados</p>
-    ${editable && will<=100 ? `<div class="will-boxes" role="group" aria-label="Puntos de Voluntad gastados">
-      ${Array.from({length:will},(_,i)=>`<label class="will-box"><input type="checkbox" data-resource-focus="will-${i+1}" aria-label="Punto ${i+1} gastado" ${marks.includes(i+1)?'checked':''} onchange="markWillSpent(${i+1},this.checked,this)"><span>${i+1}</span></label>`).join('')}
+    ${editable ? `<div class="will-boxes" role="group" aria-label="Puntos de Voluntad gastados">
+      ${Array.from({length:maxWillpower},(_,i)=>`<label class="will-box"><input type="checkbox" data-resource-focus="will-${i+1}" aria-label="Punto ${i+1} ${i<will?'gastado':'fuera de la reserva'}" ${i>=will?'disabled':''} ${marks.includes(i+1)?'checked':''} onchange="markWillSpent(${i+1},this.checked,this)"><span>${i+1}</span></label>`).join('')}
     </div>` : ''}
-    ${editable && will>100 ? `<label>Puntos gastados<input type="number" min="0" max="${will}" value="${marks.length}" onchange="changeWillSpentTotal(this)"></label>` : ''}
-    ${editable ? '<p class="sub">Marca al gastar un punto y desmarca al recuperarlo.</p>' : ''}
+    ${editable ? '<p class="sub">Marca al gastar un punto y desmarca al recuperarlo. Las casillas grises superan tu reserva.</p>' : ''}
     <div class="grid">
       <div><h3>Moralidad</h3>
         ${editable ? `<label>Valor actual<input data-resource-focus="morality" type="number" step="1" value="${morality}" onchange="changeCharacterResource('morality',this)"></label><p class="sub">Empieza en 3 y cambia según las acciones del personaje.</p>` : `<p>${morality}</p>`}
@@ -517,16 +530,6 @@ function markWillSpent(slot,checked,input) {
   if (checked) next.add(slot);
   else next.delete(slot);
   updateCharacterResources({willSpent:[...next]},input);
-}
-
-function changeWillSpentTotal(input) {
-  const {will,marks} = characterResources(d);
-  const count = input.value.trim() ? Number(input.value) : NaN;
-  if (!Number.isSafeInteger(count) || count<0 || count>will) {
-    input.value = marks.length;
-    return;
-  }
-  updateCharacterResources({willSpent:Array.from({length:count},(_,i)=>i+1)},input);
 }
 
 function changeCharacterResource(kind,input) {
