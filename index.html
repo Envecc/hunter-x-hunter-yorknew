@@ -1026,7 +1026,7 @@ function diceTraitPanel() {
   if (!traits.length) return '';
   return `<details class="market-category" id="diceTraitPanel">
     <summary>Méritos y defectos de la ficha</summary>
-    <p class="sub">Indica el ajuste que corresponda según el efecto. Usa un valor negativo para restar.</p>
+    <p class="sub">Aplica solo los rasgos que intervienen en esta tirada. Usa un valor negativo para restar.</p>
     ${traits.map((trait,index)=>`<details class="dice-trait">
       <summary>${esc(trait.name)} · ${trait.kind==='merits'?'Mérito':'Defecto'}</summary>
       <p>${esc(trait.description || 'Consulta el efecto con el narrador.')}</p>
@@ -1085,13 +1085,11 @@ function syncCombatEquipment() {
     : 'Puedes tirar sin objeto o usar uno disponible en tu inventario.';
 }
 
-function useCombatDifficulty() {
-  const item = selectedCombatEquipment();
-  if (!combatActive() || !item || marketInput('combatAction').value!=='offensive') return;
-  const match = /^weapon-(\d+)$/.exec(item.productId);
-  if (!match) return;
+function combatEquipmentDifficulty(item) {
+  const match = /^weapon-(\d+)$/.exec(item?.productId || '');
+  if (!match) return null;
   const difficulty = Number(weaponCatalog[Number(match[1])]?.[1]);
-  if (Number.isInteger(difficulty) && difficulty>=2 && difficulty<=10) marketInput('diceDiff').value = difficulty;
+  return Number.isInteger(difficulty) && difficulty>=2 && difficulty<=10 ? difficulty : null;
 }
 
 const combatNenCosts = {Ten:1,Ren:3,Zetsu:0,En:3,Gyo:1,In:1,Shu:3,Kou:4,Ken:4,Ryu:5};
@@ -1148,18 +1146,32 @@ function syncDicePool() {
   marketInput('combatShuOptions').hidden = key!=='Shu';
   marketInput('combatRyuOptions').hidden = key!=='Ryu';
   marketInput('combatNenDiceOptions').hidden = key!=='Gyo' && !key.startsWith('custom:');
-  const effect = combat ? combatNenEffect(selectedCombatEquipment()) : null;
+  const equipment = combat ? selectedCombatEquipment() : null;
+  const fixedDifficulty = combatEquipmentDifficulty(equipment);
+  const difficultyInput = marketInput('diceDiff');
+  difficultyInput.disabled = fixedDifficulty!==null;
+  difficultyInput.parentElement.hidden = fixedDifficulty!==null;
+  marketInput('combatFixedDifficulty').hidden = fixedDifficulty===null;
+  marketInput('combatFixedDifficulty').textContent = fixedDifficulty===null ? '' : 'Dificultad del objeto: '+fixedDifficulty;
+  document.querySelectorAll('[data-dice-target] option[value="difficulty"]').forEach(option=>{
+    option.disabled = fixedDifficulty!==null;
+    const select = option.closest('select');
+    select.closest('.dice-trait').querySelector('input').disabled =
+      !select.value || (option.disabled && select.value==='difficulty');
+  });
+  const effect = combat ? combatNenEffect(equipment) : null;
   const {aura,auraSpent} = characterResources(d);
   const custom = key.startsWith('custom:') ? d.techniques[Number(key.slice(7))] : null;
   marketInput('combatNenInfo').textContent = [
     key ? (custom ? [custom.requirements,custom.conditions].filter(Boolean).join(' · ') : nenGuide[key]?.effect) : '',
-    effect && key ? 'Coste de este uso: '+effect.cost+' Nen' : '',
+    effect && key ? 'Gasta '+effect.cost+' Nen al lanzar' : '',
     effect?.success ? '+'+effect.success+' éxitos automáticos Nen' : '',
-    effect?.damage ? '+'+effect.damage+' al daño (se registra por separado)' : '',
+    effect?.damage ? '+'+effect.damage+' al daño' : '',
+    key==='Ren' && !effect?.damage ? 'Ren añade daño cuando usas Combate C.C. en Ataque o Daño.' : '',
     effect && effect.cost>aura-auraSpent ? 'Nen insuficiente' : 'Nen disponible: '+(aura-auraSpent)+' / '+aura
   ].filter(Boolean).join(' · ');
   const base = dicePool(marketInput('diceAttribute').value,marketInput('diceSkill').value);
-  const equipmentDice = combat ? combatEquipmentDice(selectedCombatEquipment()) : 0;
+  const equipmentDice = combatEquipmentDice(equipment);
   const traitDice = combat ? rollTraitTotals(readDiceTraits())?.dice || 0 : 0;
   marketInput('dicePoolTotal').textContent = (base+equipmentDice+(effect?.dice || 0)+traitDice)+' dados';
   const panel = marketInput('diceTraitPanel');
@@ -1187,26 +1199,30 @@ function dicePanel() {
         </div>
         <p>Reserva de la ficha: <output id="dicePoolTotal" for="diceAttribute diceSkill"></output></p>
       </div>
-      <label id="diceCombatOption"><input id="diceCombat" type="checkbox" style="width:auto" onchange="useCombatDifficulty();syncDicePool()"> Combate</label>
+      <label id="diceCombatOption"><input id="diceCombat" type="checkbox" style="width:auto" onchange="syncDicePool()"> Combate</label>
       <fieldset id="combatControls" hidden>
         <legend>Combate</legend>
         <div class="grid">
-          <label>Acción<select id="combatAction" onchange="useCombatDifficulty();syncDicePool()">
+          <label>Acción<select id="combatAction" onchange="syncDicePool()">
             <option value="offensive">Ataque</option><option value="defensive">Defensa o absorción</option><option value="damage">Daño</option>
           </select></label>
-          <label>Equipo del inventario<select id="combatEquipment" onchange="useCombatDifficulty();syncDicePool()">
+          <label>Equipo del inventario<select id="combatEquipment" onchange="syncDicePool()">
             <option value="">Sin objeto</option>
             ${combatEquipment().map(({item,index})=>`<option value="${index}" data-item-key="${esc(item.productId+':'+(item.quality||0))}">${esc(item.name)}</option>`).join('')}
           </select></label>
         </div>
+        <p id="combatFixedDifficulty" hidden></p>
         <p id="combatEquipmentInfo" class="sub" aria-live="polite"></p>
-        <label>¿Aplicar una técnica Nen?<select id="combatNen" onchange="syncDicePool()">
+        <label>¿Aplicar una técnica Nen?<select id="combatNen" onchange="if(this.value==='Ren' && !marketInput('diceSkill').value) marketInput('diceSkill').value='Combate C.C.';syncDicePool()">
           <option value="">Sin técnica Nen</option>
           ${combatNenOptions().map(key=>`<option value="${esc(key)}">${esc(key.startsWith('custom:') ? d.techniques[Number(key.slice(7))].name : key)}</option>`).join('')}
         </select></label>
         <label id="combatShuOptions" hidden>Propiedades que otorgas con Shu<input id="combatShu" type="number" step="any" value="1" oninput="syncDicePool()"></label>
         <label id="combatRyuOptions" hidden>Porcentaje de aura asignado a esta acción<select id="combatRyu" onchange="syncDicePool()">${[10,20,30,40,50,60,70,80,90].map(value=>`<option>${value}</option>`).join('')}</select></label>
-        <label id="combatNenDiceOptions" hidden>Ajuste de dados Nen acordado con el narrador<input id="combatNenDice" type="number" step="any" value="0" oninput="syncDicePool()"></label>
+        <details id="combatNenDiceOptions" hidden class="market-category">
+          <summary>Ajuste acordado con el narrador</summary>
+          <label>Dados Nen adicionales<input id="combatNenDice" type="number" step="any" value="0" oninput="syncDicePool()"></label>
+        </details>
         <p id="combatNenInfo" class="sub" aria-live="polite"></p>
         <div id="combatTraitSlot"></div>
       </fieldset>
@@ -1244,14 +1260,15 @@ function diceRoll(event) {
   }
   const equipmentDice = combatEquipmentDice(equipment);
   const count = manual ? Number(marketInput('diceCount').value) : dicePool(attribute,skill)+equipmentDice;
-  const diff = Number(marketInput('diceDiff').value);
+  const fixedDifficulty = combatEquipmentDifficulty(equipment);
+  const diff = fixedDifficulty ?? Number(marketInput('diceDiff').value);
   const bonus = Number(marketInput('diceBonus').value);
   const inRange = (value,min,max) => Number.isInteger(value) && value>=min && value<=max;
   if (!inRange(count,1,100)||!inRange(diff,2,10)||!inRange(bonus,0,100)) {
     alert('Usa de 1 a 100 dados, dificultad de 2 a 10 y de 0 a 100 éxitos automáticos.');
     return;
   }
-  const modifiers = readDiceTraits();
+  const modifiers = readDiceTraits().filter(modifier=>fixedDifficulty===null || modifier.target!=='difficulty');
   const totals = rollTraitTotals(modifiers);
   if (!totals) {
     alert('Indica un ajuste entero distinto de cero para cada rasgo aplicado.');
