@@ -131,12 +131,14 @@ Ken:{req:'Kou adquirido',effect:'Distribuye Ten + Ren en una defensa y ataque eq
 Ryu:{req:'Ten 5 y Ren 5',effect:'Redistribuye dinámicamente Ten + Ren entre ataque y defensa (10/90, 20/80, 30/70, 40/60, etc.).',aura:'5 puntos de Nen.'}};
 function nenXp(k){const n=Number(d.nen[k]||0),m=({En:3,Shu:3,Kou:4,Ken:4,Ryu:5}[k]||2);return n===0?'Sin costo definido desde 0 (consultar narrador)':`${n*m} PX Nen (valor actual ${n} × ${m})`}
 function nenTechniqueRows() {
+  const totals = budget();
   const expanded = new Set(Array.from(document.querySelectorAll('details[data-nen-technique][open]'),
     entry => entry.dataset.nenTechnique));
   return nen.map(key => {
     const guide = nenGuide[key];
     const level = Number(d.nen[key] || 0);
     const available = allowed(key);
+    const quote = creationIncrease('nen',key,totals);
     return `<div class="nen-technique">
       <details data-nen-technique="${esc(key)}" ${expanded.has(key) ? 'open' : ''}>
         <summary><strong>${esc(key)}</strong> <small>${available ? 'Disponible' : 'Requisitos pendientes'}</small></summary>
@@ -150,7 +152,7 @@ function nenTechniqueRows() {
       <div class="controls">
         <button aria-label="Bajar nivel de ${esc(key)}" onclick="adjust('nen','${key}',-1)" ${creationIsClosed()?'disabled':''}>−</button>
         <b aria-label="Nivel ${level} de 5">${level}</b>
-        <button aria-label="Subir nivel de ${esc(key)}" onclick="adjust('nen','${key}',1)" ${creationIsClosed()?'disabled':''}>+</button>
+        <button aria-label="Subir nivel de ${esc(key)}" onclick="adjust('nen','${key}',1)" ${purchaseButton(quote)}>+ ${quote.label}</button>
       </div>
     </div>`;
   }).join('') + '<p class="sub">Fuente: manual de la campaña, sección «Atributos Nen» y tabla «Experiencia habilidades Nen». La tabla denomina «RYO» a Ryu.</p>';
@@ -236,28 +238,46 @@ function describeInitialPoints(pending) {
   return pending.map(([name,points])=>name+' '+points).join(' · ');
 }
 
+function creationPurchase(before,after) {
+  const cost = before.free-after.free;
+  const spendsPG = Object.keys(after.spent).some(key=>after.spent[key]>before.spent[key]);
+  const pending = remainingInitialPoints(before);
+  const blocked = spendsPG && (pending.length>0 || after.free<0);
+  return {cost,blocked,pending};
+}
+
+function creationIncrease(kind,key,totals) {
+  const current = integer(key ? d[kind][key] : d[kind]);
+  const increment = kind==='reserveBonus' ? 3 : 1;
+  const value = current+increment;
+  const next = {...d,[kind]:key ? {...d[kind],[key]:value} : value};
+  const {cost,blocked} = creationPurchase(totals,budget(next));
+  const capped = key ? current>=5 || (kind==='nen' && !allowed(key))
+    || (d.usePriorities?.[kind] && categoryCost(kind,categoryOf(kind,key))+
+      (creationRating(current,key,experienceLevels(d),kind==='attrs'?1:0)===4?2:1)>categoryLimit(kind,categoryOf(kind,key)))
+    : kind==='hatsu' ? current>=5 : kind==='willBonus' && willpowerRating(d)>=maxWillpower;
+  const label = cost>0 ? cost+' PG' : '';
+  return {disabled:creationIsClosed() || capped || blocked,label};
+}
+
+function purchaseButton(quote) {
+  return quote.disabled ? 'disabled' : '';
+}
+
 function commitCreation(next) {
   if (creationIsClosed()) {
     alert('La creación está cerrada. Usa Experiencia para mejorar tu personaje.');
     return false;
   }
-  if (!confirmNenDependencyChange(next)) return false;
-  const before = budget();
-  const after = budget(next);
-  const spendsMore = Object.keys(after.spent).some(key=>after.spent[key]>before.spent[key]);
-  if (spendsMore) {
-    const pending = remainingInitialPoints(before);
-    if (pending.length) {
-      alert('Completa el reparto inicial antes de usar PG. Por repartir: '+describeInitialPoints(pending)+'.');
-      render();
-      return false;
-    }
-    if (after.free<0) {
-      alert('No quedan suficientes puntos gratuitos para este cambio.');
-      render();
-      return false;
-    }
+  const {blocked,pending} = creationPurchase(budget(),budget(next));
+  if (blocked) {
+    alert(pending.length
+      ? 'Completa el reparto inicial antes de usar PG. Por repartir: '+describeInitialPoints(pending)+'.'
+      : 'No quedan suficientes puntos gratuitos para este cambio.');
+    render();
+    return false;
   }
+  if (!confirmNenDependencyChange(next)) return false;
   d=next;
   save();
   render();
@@ -282,8 +302,9 @@ function adjustCreationBonus(key,delta) {
   commitCreation({...d,[key]:value});
 }
 
-function creationPointPanel() {
-  const totals = budget();
+function creationPointPanel(totals=budget()) {
+  const willPurchase = creationIncrease('willBonus',null,totals);
+  const reservePurchase = creationIncrease('reserveBonus',null,totals);
   const pending = remainingInitialPoints(totals);
   const closed = creationIsClosed();
   const state = closed ? 'Creación cerrada. Las mejoras se realizan en Experiencia.'
@@ -291,12 +312,12 @@ function creationPointPanel() {
     : 'Reparto inicial completo. Ya puedes gastar PG.';
   const entries = [['Atributos','attrs','5 PG por círculo'],['Habilidades','skills','2 PG por círculo'],['Técnicas Nen','nen','2 PG por círculo'],
     ['Hatsu','hatsu','4 PG por círculo'],['Fuerza de Voluntad','willBonus','1 PG por círculo'],['Reserva Nen','reserveBonus','3 de aura por 1 PG']];
-  return `<div class="panel"><h2>Puntos gratuitos</h2><p class="sub" role="status">${esc(state)}</p><p><strong>${totals.free} de ${freeCreationPoints} PG disponibles</strong></p>
+  return `<div class="panel"><h2>Puntos gratuitos</h2><p class="sub" role="status">${esc(state)}</p><p><strong>${totals.free} de ${freeCreationPoints} PG disponibles</strong> · ${freeCreationPoints-totals.free} PG gastados</p>
     <div class="grid">${entries.map(([name,key,unit])=>`<p>${name} · <b>${totals.spent[key]} PG</b><br><small>${unit}</small></p>`).join('')}</div>
     <div class="trait"><span>Fuerza de Voluntad adicional <small>1 PG por punto</small></span>
-      <span class="controls"><button aria-label="Quitar un punto de Voluntad" onclick="adjustCreationBonus('willBonus',-1)" ${closed?'disabled':''}>−</button><b>${esc(d.willBonus)}</b><button aria-label="Añadir un punto de Voluntad" onclick="adjustCreationBonus('willBonus',1)" ${closed||pending.length||willpowerRating(d)>=maxWillpower?'disabled':''}>+</button></span></div>
+      <span class="controls"><button aria-label="Quitar un punto de Voluntad" onclick="adjustCreationBonus('willBonus',-1)" ${closed?'disabled':''}>−</button><b>${esc(d.willBonus)}</b><button aria-label="Añadir un punto de Voluntad" onclick="adjustCreationBonus('willBonus',1)" ${purchaseButton(willPurchase)}>+ 1 PG</button></span></div>
     <div class="trait"><span>Reserva Nen adicional <small>3 de aura por 1 PG</small></span>
-      <span class="controls"><button aria-label="Quitar tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',-3)" ${closed?'disabled':''}>−</button><b>${esc(d.reserveBonus)}</b><button aria-label="Añadir tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',3)" ${closed||pending.length?'disabled':''}>+</button></span></div>
+      <span class="controls"><button aria-label="Quitar tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',-3)" ${closed?'disabled':''}>−</button><b>${esc(d.reserveBonus)}</b><button aria-label="Añadir tres puntos de aura" onclick="adjustCreationBonus('reserveBonus',3)" ${purchaseButton(reservePurchase)}>+ 1 PG</button></span></div>
   </div>`;
 }
 const CATEGORY_NAMES=['Físicos','Sociales','Mentales'];const PRIORITY_LIMITS={attrs:[6,4,2],skills:[11,8,6]};
@@ -400,7 +421,7 @@ function affinityDiagram() {
   </figure>`;
 }
 
-function rows(names,kind){return names.map(k=>{let n=d[kind][k]||0;if(kind==='paths')return `<div class="trait"><span>${esc(k)} <small>${(caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20}% máx.</small></span><b>${esc(n)} / 5</b></div>`;return `<div class="trait"><span>${esc(k)} <small>${esc(kind==='nen' && !allowed(k)?'Requisitos pendientes: '+missingNenRequirements(k).join(' · '):'')}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)" ${creationIsClosed()?'disabled':''}>−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)" ${creationIsClosed()?'disabled':''}>+</button></span></div>`}).join('')}
+function rows(names,kind){const totals=budget();return names.map(k=>{let n=d[kind][k]||0;if(kind==='paths')return `<div class="trait"><span>${esc(k)} <small>${(caps[d.affinity]||caps.Intensificación)[paths.indexOf(k)]*20}% máx.</small></span><b>${esc(n)} / 5</b></div>`;const quote=creationIncrease(kind,k,totals);return `<div class="trait"><span>${esc(k)} <small>${esc(kind==='nen' && !allowed(k)?'Requisitos pendientes: '+missingNenRequirements(k).join(' · '):'')}</small></span><span class="controls"><button onclick="adjust('${kind}','${k}',-1)" ${creationIsClosed()?'disabled':''}>−</button><b>${n}</b><button onclick="adjust('${kind}','${k}',1)" ${purchaseButton(quote)}>+ ${quote.label}</button></span></div>`}).join('')}
 function traitConflict(name){return ({'Corpulento':['Bajo','Niño'],'Bajo':['Corpulento'],'Niño':['Corpulento'],'Elástico':['Cojera'],'Cojera':['Elástico']})[name]||[]}
 const traitLimits = {merits:9,defects:3};
 const baseMeritPoints = 3;
@@ -642,7 +663,7 @@ function renderSheetPhase(totals) {
 function render(){const b=budget();renderSheetPhase(b);document.getElementById('stats').innerHTML=[['Atributos',creationPoolLabel(b.a,12)],['Habilidades',creationPoolLabel(b.s,25)],['Nen inicial',creationPoolLabel(b.n,b.nb)],['Gratuitos',b.free],['PX general',d.xp],['PX Nen',d.xpNen],['Reserva aura',d.hatsu*10+d.reserveBonus]].map(([k,v])=>`<div class="stat"><small>${k}</small><strong class="${typeof v==='number'&&v<0?'bad':''}">${v}</strong></div>`).join('');let tabs=['Identidad','Atributos','Habilidades','Nen y Hatsu','Méritos y defectos','Técnicas','Experiencia','Ficha','Diario de campaña'];document.getElementById('tabs').innerHTML=tabs.map((x,i)=>i===6?'':`<a class="jump" href="#sec${i}">${x}</a>`).join('');let c='';c+=`<section id="sec0" class="sheet-section"><div class="section-title">01 · Identidad</div>`+`<div class="panel"><h2>Identidad del personaje</h2><div class="identity-layout"><div><div class="grid">${field('name','Nombre')}${field('age','Edad','number')}${field('type','Tipo de cazador / ocupación')}${field('personality','Personalidad')}${field('height','Tamaño (normal 5)','number')}<label>Etapa<select onchange="setNenStage(this.value)" ${creationIsClosed()?'disabled':''}><option ${d.tier==='Novato'?'selected':''}>Novato</option><option ${d.tier==='Controlador'?'selected':''}>Controlador</option></select></label></div><label>Historia<textarea onchange="set('bio',this.value)">${esc(d.bio)}</textarea></label></div><aside class="identity-photo"><img class="portrait" alt="Retrato del personaje" src="${safePortrait(d.portrait)}"><label>Retrato<input type="file" accept="image/*" onchange="uploadPortrait(this)"></label><button onclick="d.portrait='';save();render()">Quitar imagen</button></aside></div></div>`;
 c+=`<section id="sec1" class="sheet-section"><div class="section-title">02 · Atributos</div>`+priorityPanel('attrs')+`<div class="grid">${[['Físicos',attributes.slice(0,3)],['Sociales',attributes.slice(3,6)],['Mentales',attributes.slice(6)]].map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'attrs')}</div>`).join('')}</div><div class="notice">Reparte 12 puntos entre todos los atributos. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 5 PG.</div>`;
 c+=`<section id="sec2" class="sheet-section"><div class="section-title">03 · Habilidades</div>`+priorityPanel('skills')+`<div class="grid">${Object.entries(skills).map(([k,v])=>`<div class="panel"><h2>${k}</h2>${rows(v,'skills')}</div>`).join('')}</div><div class="notice">Reparte 25 puntos entre todas las habilidades. El quinto círculo cuesta 2 puntos. Cada círculo comprado con PG cuesta 2 PG.</div>`;
-c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Nen y Hatsu</div>`+`<div class="grid"><div class="panel"><h2>Técnicas Nen</h2><p><b>${creationPoolLabel(b.n,b.nb)}</b></p><p class="sub">Reparte los puntos iniciales entre Ten, Ren y Zetsu. Las técnicas avanzadas requieren sus condiciones y cuestan 2 PG por círculo al crear.</p>${nenTechniqueRows()}</div><div class="panel"><h2>Afinidad y caminos</h2><label>Afinidad<select onchange="set('affinity',this.value)">${paths.map(x=>`<option ${d.affinity===x?'selected':''}>${x}</option>`).join('')}</select></label>${rows(paths,'paths')}<div class="trait">Hatsu general <small>${nenStage(d.tier).hatsu} inicial · 4 PG por punto adicional</small> <span class="controls"><button onclick="adjustCreationBonus('hatsu',-1)" ${creationIsClosed()?'disabled':''}>−</button>${d.hatsu}<button onclick="adjustCreationBonus('hatsu',1)" ${creationIsClosed()||remainingInitialPoints(b).length?'disabled':''}>+</button></span></div>${affinityDiagram()}</div></div>${creationPointPanel()}<div class="notice">Requisitos de técnicas avanzadas verificados al aumentar. Los caminos Hatsu se desarrollan con PX generales desde Experiencia.</div>`;
+c+=`<section id="sec3" class="sheet-section"><div class="section-title">04 · Nen y Hatsu</div>`+`<div class="grid"><div class="panel"><h2>Técnicas Nen</h2><p><b>${creationPoolLabel(b.n,b.nb)}</b></p><p class="sub">Reparte los puntos iniciales entre Ten, Ren y Zetsu. Las técnicas avanzadas requieren sus condiciones y cuestan 2 PG por círculo al crear.</p>${nenTechniqueRows()}</div><div class="panel"><h2>Afinidad y caminos</h2><label>Afinidad<select onchange="set('affinity',this.value)">${paths.map(x=>`<option ${d.affinity===x?'selected':''}>${x}</option>`).join('')}</select></label>${rows(paths,'paths')}<div class="trait">Hatsu general <small>${nenStage(d.tier).hatsu} inicial · 4 PG por punto adicional</small> <span class="controls"><button onclick="adjustCreationBonus('hatsu',-1)" ${creationIsClosed()?'disabled':''}>−</button>${d.hatsu}<button onclick="adjustCreationBonus('hatsu',1)" ${purchaseButton(creationIncrease('hatsu',null,b))}>+ 4 PG</button></span></div>${affinityDiagram()}</div></div>${creationPointPanel(b)}<div class="notice">Requisitos de técnicas avanzadas verificados al aumentar. Los caminos Hatsu se desarrollan con PX generales desde Experiencia.</div>`;
 c+=`<section id="sec4" class="sheet-section"><div class="section-title">05 · Méritos y defectos</div>`+`<div class="grid"><div class="panel"><h2>Méritos</h2>${meritBudgetSummary()}${catalog('merits',merits)}</div><div class="panel"><h2>Defectos</h2>${catalog('defects',defects)}</div></div><div class="notice">Cada punto aportado por un defecto suma un punto al presupuesto de méritos. El narrador debe validar coherencia y restricciones. Los méritos Hatsu requieren Nen, afinidad correspondiente y tienen límite de dos. Los rasgos con coste variable necesitan acuerdo con el narrador.</div>`;
 c+=`<section id="sec5" class="sheet-section"><div class="section-title">06 · Técnicas</div>`+`<div class="panel"><h2>Diseñador de técnicas especiales Nen</h2><div class="grid"><label>Nombre<input id="tn" placeholder="Nombre de técnica"></label><label>Requisitos / caminos<input id="tr" placeholder="Ej. Emisión 3 + Control 3"></label><label>Costo aura acordado<input id="tc" type="number" min="0"></label><label>Condiciones y compromisos<textarea id="td"></textarea></label></div><button class="primary" onclick="addTech()">Añadir técnica</button><div class="notice">El manual deja el costo de aura y la complejidad de cada técnica a criterio del narrador; aquí se registran, no se inventan.</div>${d.techniques.map((x,i)=>`<div class="trait"><span><b>${esc(x.name)}</b><br><small>${esc(x.requirements)} · ${esc(x.cost)} aura · ${esc(x.conditions)}</small></span><button onclick="d.techniques.splice(${i},1);save();render()">Eliminar</button></div>`).join('')}</div>`;
 document.getElementById('experienceContent').innerHTML=`<section id="sec6" class="sheet-section"><div class="section-title">Experiencia</div>`+`<div class="grid"><div class="panel"><h2>Revisiones del narrador</h2><label>Aplicar revisión JSON<input type="file" accept=".json" onchange="applyReview(this)"></label>${reviewHistory(d.narratorReviews || [])}<h2>Asignar experiencia</h2><label>PX general<input type="number" min="0" value="${d.xp}" onchange="set('xp',Math.max(0,+this.value||0))"></label><label>PX Nen<input type="number" min="0" value="${d.xpNen}" onchange="set('xpNen',Math.max(0,+this.value||0))"></label><h2>Atributos</h2>${progression(attributes,'attrs')}<h2>Habilidades</h2>${progression(allSkills,'skills')}<h2>Voluntad</h2>${progression([willHistoryKey],'willBonus')}</div><div class="panel"><h2>Hatsu y caminos</h2>${progression(['Hatsu'],'hatsu')}${progression(paths,'paths')}<h2>Técnicas Nen</h2>${progression(nen,'nen')}<h2>Historial</h2><div id="log">${d.history.slice().reverse().map(x=>`<p>${esc(x)}</p>`).join('')}</div></div></div><div class="notice">PX general: atributo nuevo nivel ×5; habilidad ×2; Hatsu ×4; camino ×3; Voluntad cuesta su nueva puntuación. PX Nen: coste según valor actual y multiplicador del manual. Un nivel 0 de Nen requiere decisión del narrador.</div></section>`;
